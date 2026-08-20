@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>置裝帳本｜分期追蹤</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0F1B2D;
+    --denim:#1B2A41;
+    --denim-deep:#132038;
+    --paper:#F4EFE3;
+    --thread:#C9A227;
+    --thread-soft:#E4C660;
+    --rust:#B4532A;
+    --sage:#6B8A5C;
+  }
+  html,body{ background:var(--denim-deep); font-family:'Inter',sans-serif; }
+  .font-display{ font-family:'Oswald',sans-serif; letter-spacing:.02em; }
+  .font-mono{ font-family:'JetBrains Mono',monospace; }
+
+  .denim-weave{
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.045) 1px, transparent 0);
+    background-size: 10px 10px;
+  }
+
+  .tag-card{
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 4px 14px 4px 14px;
+    position: relative;
+    box-shadow: 0 10px 24px -12px rgba(0,0,0,0.55);
+  }
+  .tag-hole{
+    width: 14px; height: 14px;
+    border-radius: 999px;
+    background: var(--denim-deep);
+    border: 3px solid var(--thread-soft);
+    position: absolute;
+    top: 12px; right: 12px;
+  }
+  .stitch-edge{
+    border: 1.5px dashed rgba(15,27,45,0.28);
+  }
+  .stitch-line{
+    background-image: repeating-linear-gradient(90deg, var(--thread) 0 6px, transparent 6px 12px);
+    height: 2px;
+  }
+  .tab-btn{
+    transition: all .2s ease;
+  }
+  .tab-btn.active{
+    background: var(--thread);
+    color: var(--ink);
+  }
+  .tab-btn:not(.active){
+    color: rgba(244,239,227,0.55);
+  }
+  input, select{
+    background: rgba(244,239,227,0.06);
+    border: 1px solid rgba(244,239,227,0.18);
+    color: var(--paper);
+  }
+  input:focus, select:focus{
+    outline: none;
+    border-color: var(--thread);
+    box-shadow: 0 0 0 3px rgba(201,162,39,0.18);
+  }
+  input::placeholder{ color: rgba(244,239,227,0.35); }
+  ::-webkit-scrollbar{ width:0; height:0; }
+
+  .progress-track{
+    background: rgba(15,27,45,0.12);
+    border-radius: 999px;
+    overflow:hidden;
+  }
+  .progress-fill{
+    background: linear-gradient(90deg, var(--sage), #85A876);
+  }
+
+  .btn-press:active{ transform: scale(0.96); }
+
+  @keyframes riseIn{
+    from{ opacity:0; transform: translateY(8px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+  .rise-in{ animation: riseIn .25s ease both; }
+</style>
+</head>
+<body class="min-h-screen denim-weave">
+
+<div class="max-w-md mx-auto min-h-screen flex flex-col" style="background:var(--denim);">
+
+  <!-- Header -->
+  <header class="px-5 pt-7 pb-5 border-b" style="border-color: rgba(244,239,227,0.1);">
+    <div class="flex items-center gap-2">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center" style="background:var(--thread);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h4l2 2 2-2h4l3 5-4 3v10H7V11L3 8z"/></svg>
+      </div>
+      <div>
+        <h1 class="font-display text-xl text-[var(--paper)] tracking-wide">置裝帳本</h1>
+        <p class="text-[11px] font-mono" style="color:rgba(244,239,227,0.4);">WARDROBE LEDGER &amp; INSTALLMENTS</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="px-5 pt-4">
+    <div class="grid grid-cols-2 gap-2 p-1 rounded-xl" style="background:rgba(244,239,227,0.06);">
+      <button id="tabBtnAdd" class="tab-btn active font-display text-sm py-2.5 rounded-lg btn-press">＋ 新增消費</button>
+      <button id="tabBtnOverview" class="tab-btn font-display text-sm py-2.5 rounded-lg btn-press">📅 每月總覽</button>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="flex-1 px-5 py-5 overflow-y-auto pb-10">
+
+    <!-- ============ TAB 1: 新增消費 ============ -->
+    <section id="panelAdd">
+      <form id="addForm" class="tag-card stitch-edge p-5 rise-in">
+        <div class="tag-hole"></div>
+        <p class="font-display text-xs tracking-widest mb-3" style="color:var(--rust);">NEW PURCHASE</p>
+
+        <label class="block text-xs font-medium mb-1 opacity-70">品項名稱</label>
+        <input id="fName" type="text" required placeholder="例如：DAIWA 防風外套"
+          class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="block text-xs font-medium mb-1 opacity-70">金額（總額）</label>
+            <input id="fAmount" type="number" min="0" step="1" required placeholder="0"
+              class="w-full px-3 py-2.5 rounded-lg text-sm font-mono" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1 opacity-70">購買日期</label>
+            <input id="fDate" type="date" required
+              class="w-full px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-2">
+          <div>
+            <label class="block text-xs font-medium mb-1 opacity-70">分期期數</label>
+            <input id="fInstallments" type="number" min="1" step="1" value="1" required
+              class="w-full px-3 py-2.5 rounded-lg text-sm font-mono" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1 opacity-70">該筆利率%</label>
+            <input id="fRate" type="number" min="0" step="0.01" value="0"
+              class="w-full px-3 py-2.5 rounded-lg text-sm font-mono" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+          </div>
+        </div>
+        <p class="text-[11px] mb-4 opacity-50">常見期數會自動帶入預設利率：3期2%・6期4%・9期6%・12期7%（可自行修改）</p>
+
+        <div class="stitch-line mb-4"></div>
+
+        <div class="flex items-center justify-between text-sm">
+          <span class="opacity-70">首期應繳（含餘數）</span>
+          <span id="previewFirstPeriod" class="font-mono font-bold text-base" style="color:var(--rust);">$0</span>
+        </div>
+        <div class="flex items-center justify-between mb-4 text-sm">
+          <span class="opacity-70">後續每期應繳</span>
+          <span id="previewLaterPeriod" class="font-mono font-bold text-base" style="color:var(--ink);">$0</span>
+        </div>
+
+        <button type="submit" class="btn-press w-full py-3 rounded-lg font-display tracking-wide text-sm"
+          style="background:var(--ink); color:var(--paper);">
+          ✂️ 加入帳本
+        </button>
+      </form>
+
+      <!-- Batch import -->
+      <div class="mt-4">
+        <button id="importToggle" type="button" class="btn-press w-full py-3 rounded-lg font-display tracking-wide text-sm flex items-center justify-center gap-2"
+          style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px dashed rgba(244,239,227,0.25);">
+          📋 從備忘錄批次匯入
+        </button>
+
+        <div id="importPanel" class="hidden tag-card stitch-edge p-5 mt-3 rise-in">
+          <div class="tag-hole"></div>
+          <p class="font-display text-xs tracking-widest mb-2" style="color:var(--rust);">BATCH IMPORT</p>
+          <p class="text-xs mb-3 leading-relaxed opacity-70">
+            可直接貼上你備忘錄原本的寫法，每行一筆：<br>
+            <span class="font-mono">日期 品項 $金額(第幾期/總期數)</span><br>
+            同一品項的多期會自動合併成一筆紀錄（購買日期取第 1 期）。<br>
+            也支援一次付清：<span class="font-mono">日期 品項 $金額</span>，<br>
+            或逗號格式：<span class="font-mono">品項, 金額, 日期, 期數, 利率%</span><br>
+            日期支援 24/07/30 或 2024/07/30 兩種年份寫法。
+          </p>
+          <textarea id="importText" rows="10" placeholder="24/03/05 DAIWA外套 $3000(1/4)
+24/04/05 DAIWA外套 $3000(2/4)
+24/05/05 DAIWA外套 $3000(3/4)
+24/06/05 DAIWA外套 $3000(4/4)
+24/05/20 NIKE鞋 $1500"
+            class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm font-mono" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);"></textarea>
+          <div id="importResult" class="text-xs font-mono mb-3 hidden"></div>
+          <div class="flex gap-2">
+            <button id="importRun" type="button" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--sage); color:var(--ink);">
+              匯入
+            </button>
+            <button id="importCancel" type="button" class="btn-press px-4 py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(244,239,227,0.1); color:var(--paper);">
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- All records management -->
+      <div class="mt-6">
+        <button id="allRecordsToggle" type="button" class="w-full flex items-center justify-between px-1 py-1 btn-press">
+          <p class="font-display text-xs tracking-widest" style="color:rgba(244,239,227,0.45);">所有紀錄 <span id="allRecordsCount"></span></p>
+          <svg id="allRecordsChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(244,239,227,0.45)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition: transform .2s;"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <p class="text-[11px] mt-1 px-1 opacity-40">點單筆右側垃圾桶圖示可刪除該筆輸入紀錄</p>
+        <div id="allRecordsList" class="hidden space-y-2 mt-2 max-h-80 overflow-y-auto pr-0.5"></div>
+        <p id="allRecordsEmpty" class="text-center text-sm py-6" style="color:rgba(244,239,227,0.35);">尚未新增任何紀錄</p>
+      </div>
+    </section>
+
+    <!-- ============ TAB 2: 每月總覽 ============ -->
+    <section id="panelOverview" class="hidden">
+
+      <div class="flex items-center justify-between mb-5 rise-in">
+        <button id="prevMonth" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="text-center">
+          <p id="monthLabel" class="font-display text-xl text-[var(--paper)]">2026年 08月</p>
+          <p class="text-[11px] font-mono mb-1.5" style="color:rgba(244,239,227,0.4);">MONTHLY STATEMENT</p>
+          <input type="month" id="monthPicker"
+            class="text-xs font-mono px-3 py-1 rounded-full text-center"
+            style="background:rgba(244,239,227,0.08); color:var(--paper); border:1px solid rgba(244,239,227,0.22); color-scheme:dark;">
+        </div>
+        <button id="nextMonth" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+
+      <div class="tag-card stitch-edge p-5 mb-5 rise-in">
+        <div class="tag-hole"></div>
+        <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">TOTAL DUE</p>
+        <p id="monthTotal" class="font-mono font-bold text-3xl">$0</p>
+        <p id="monthCount" class="text-xs opacity-60 mt-1">共 0 筆</p>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 mb-3">
+        <button id="monthSelectModeToggle" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">選取刪除</button>
+        <button id="monthDeleteAllBtn" type="button" class="text-[11px] underline" style="color:var(--rust);">清空全部紀錄</button>
+      </div>
+
+      <div id="monthList" class="space-y-3"></div>
+      <p id="monthEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">這個月份沒有支出紀錄 🧵</p>
+
+      <div id="monthBulkDeleteBar" class="hidden mt-3">
+        <button id="monthDeleteSelectedBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--rust); color:#fff;">
+          刪除已選（<span id="monthSelectedCount">0</span>）
+        </button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Detail Modal -->
+<div id="detailModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background:rgba(0,0,0,0.6);">
+  <div id="detailModalContent" class="tag-card stitch-edge p-5 w-full max-w-sm rise-in"></div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'wardrobeLedgerRecords';
+
+  function loadRecords(){
+    try{
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    }catch(e){ return []; }
+  }
+  function saveRecords(records){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  }
+  let records = loadRecords();
+
+  // ---------- Helpers ----------
+  function fmtMoney(n){
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
+  // 總金額（含利率）四捨五入後，平均攤分到每一期；除不盡的餘數計入第 1 期
+  function totalRounded(r){
+    return Math.round(r.amount * (1 + r.rate/100));
+  }
+  function basePeriodAmount(r){
+    return Math.floor(totalRounded(r) / r.installments);
+  }
+  function perPeriodAmount(r, period){
+    const total = totalRounded(r);
+    const base = basePeriodAmount(r);
+    const remainder = total - base * r.installments;
+    return period === 1 ? base + remainder : base;
+  }
+  function ymKey(y,m){ return y*12 + m; } // m: 0-11
+
+  function tabSwitch(tab){
+    const isAdd = tab === 'add';
+    document.getElementById('panelAdd').classList.toggle('hidden', !isAdd);
+    document.getElementById('panelOverview').classList.toggle('hidden', isAdd);
+    document.getElementById('tabBtnAdd').classList.toggle('active', isAdd);
+    document.getElementById('tabBtnOverview').classList.toggle('active', !isAdd);
+    if(!isAdd) renderMonth();
+  }
+  document.getElementById('tabBtnAdd').addEventListener('click', ()=>tabSwitch('add'));
+  document.getElementById('tabBtnOverview').addEventListener('click', ()=>tabSwitch('overview'));
+
+  // ---------- Add form ----------
+  const fName = document.getElementById('fName');
+  const fAmount = document.getElementById('fAmount');
+  const fDate = document.getElementById('fDate');
+  const fInstallments = document.getElementById('fInstallments');
+  const fRate = document.getElementById('fRate');
+  const previewFirstPeriod = document.getElementById('previewFirstPeriod');
+  const previewLaterPeriod = document.getElementById('previewLaterPeriod');
+
+  // default date = today
+  fDate.value = new Date().toISOString().slice(0,10);
+
+  // 常見分期期數的預設利率，方便快速換算原金額（可自行覆蓋修改）
+  const RATE_PRESETS = { 3: 2, 6: 4, 9: 6, 12: 7 };
+
+  function updatePreview(){
+    const amount = parseFloat(fAmount.value) || 0;
+    const inst = Math.max(parseInt(fInstallments.value) || 1, 1);
+    const rate = parseFloat(fRate.value) || 0;
+    const total = Math.round(amount * (1 + rate/100));
+    const base = Math.floor(total / inst);
+    const remainder = total - base * inst;
+    previewFirstPeriod.textContent = fmtMoney(base + remainder);
+    previewLaterPeriod.textContent = inst > 1 ? fmtMoney(base) : '—';
+  }
+  fInstallments.addEventListener('input', ()=>{
+    const inst = parseInt(fInstallments.value);
+    if(RATE_PRESETS.hasOwnProperty(inst)){
+      fRate.value = RATE_PRESETS[inst];
+    }
+    updatePreview();
+  });
+  [fAmount, fRate].forEach(el => el.addEventListener('input', updatePreview));
+
+  document.getElementById('addForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const record = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      name: fName.value.trim(),
+      amount: parseFloat(fAmount.value) || 0,
+      date: fDate.value,
+      installments: Math.max(parseInt(fInstallments.value) || 1, 1),
+      rate: parseFloat(fRate.value) || 0,
+    };
+    if(!record.name || !record.amount || !record.date){ return; }
+
+    records.push(record);
+    saveRecords(records);
+
+    // reset form
+    fName.value = '';
+    fAmount.value = '';
+    fInstallments.value = 1;
+    fRate.value = 0;
+    fDate.value = new Date().toISOString().slice(0,10);
+    updatePreview();
+
+    renderAllRecords();
+    renderMonth();
+  });
+
+  function deleteRecord(id){
+    if(!confirm('確定要刪除這筆紀錄嗎？此動作無法復原。')) return;
+    records = records.filter(r => r.id !== id);
+    saveRecords(records);
+    renderAllRecords();
+    renderMonth();
+  }
+
+  // ---------- All records list (in Add tab) — 僅提供單筆刪除，管理輸入紀錄本身 ----------
+  const allRecordsList = document.getElementById('allRecordsList');
+  const allRecordsToggle = document.getElementById('allRecordsToggle');
+  const allRecordsChevron = document.getElementById('allRecordsChevron');
+
+  allRecordsToggle.addEventListener('click', ()=>{
+    const isHidden = allRecordsList.classList.toggle('hidden');
+    allRecordsChevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+  });
+
+  function renderAllRecords(){
+    const wrap = allRecordsList;
+    const empty = document.getElementById('allRecordsEmpty');
+    wrap.innerHTML = '';
+
+    const sorted = [...records].sort((a,b) => b.date.localeCompare(a.date));
+    document.getElementById('allRecordsCount').textContent = sorted.length > 0 ? `（${sorted.length} 筆）` : '';
+    empty.classList.toggle('hidden', sorted.length > 0);
+    allRecordsToggle.classList.toggle('hidden', sorted.length === 0);
+
+    sorted.forEach(r => {
+      const first = perPeriodAmount(r, 1);
+      const later = basePeriodAmount(r);
+      const detail = r.installments === 1
+        ? `一次付清 ・ ${fmtMoney(first)}`
+        : `${r.installments} 期 ・ 首期 ${fmtMoney(first)} ・ 之後每期 ${fmtMoney(later)}`;
+      const div = document.createElement('div');
+      div.className = 'flex items-center justify-between px-4 py-3 rounded-lg';
+      div.style.background = 'rgba(244,239,227,0.06)';
+      div.innerHTML = `
+        <div class="min-w-0 pr-3 flex-1">
+          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)}</p>
+          <p class="text-[11px] font-mono mt-0.5" style="color:rgba(244,239,227,0.45);">
+            ${r.date} ・ ${detail}
+          </p>
+        </div>
+        <button data-id="${r.id}" class="delBtn btn-press shrink-0 w-8 h-8 rounded-full flex items-center justify-center" style="background:rgba(180,83,42,0.18);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--rust)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"/></svg>
+        </button>
+      `;
+      wrap.appendChild(div);
+    });
+
+    wrap.querySelectorAll('.delBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=> deleteRecord(btn.dataset.id));
+    });
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- Monthly overview ----------
+  const today = new Date();
+  let viewYear = today.getFullYear();
+  let viewMonth = today.getMonth(); // 0-11
+  let monthSelectMode = false;
+  let monthSelectedIds = new Set();
+
+  document.getElementById('prevMonth').addEventListener('click', ()=>{
+    viewMonth--; if(viewMonth < 0){ viewMonth = 11; viewYear--; }
+    renderMonth();
+  });
+  document.getElementById('nextMonth').addEventListener('click', ()=>{
+    viewMonth++; if(viewMonth > 11){ viewMonth = 0; viewYear++; }
+    renderMonth();
+  });
+  const monthPickerEl = document.getElementById('monthPicker');
+  monthPickerEl.addEventListener('change', (e)=>{
+    const val = e.target.value; // "YYYY-MM"
+    if(!val) return;
+    const [y, m] = val.split('-').map(Number);
+    viewYear = y;
+    viewMonth = m - 1;
+    renderMonth();
+  });
+  monthPickerEl.addEventListener('click', ()=>{
+    if(typeof monthPickerEl.showPicker === 'function'){
+      try{ monthPickerEl.showPicker(); }catch(err){ /* ignore */ }
+    }
+  });
+
+  const monthSelectModeToggle = document.getElementById('monthSelectModeToggle');
+  const monthDeleteAllBtn = document.getElementById('monthDeleteAllBtn');
+  const monthBulkDeleteBar = document.getElementById('monthBulkDeleteBar');
+  const monthDeleteSelectedBtn = document.getElementById('monthDeleteSelectedBtn');
+  const monthSelectedCountEl = document.getElementById('monthSelectedCount');
+
+  monthSelectModeToggle.addEventListener('click', ()=>{
+    monthSelectMode = !monthSelectMode;
+    monthSelectedIds.clear();
+    monthSelectModeToggle.textContent = monthSelectMode ? '取消選取' : '選取刪除';
+    monthBulkDeleteBar.classList.toggle('hidden', !monthSelectMode);
+    updateMonthSelectedCount();
+    renderMonth();
+  });
+
+  monthDeleteAllBtn.addEventListener('click', ()=>{
+    if(records.length === 0) return;
+    if(!confirm(`確定要刪除全部 ${records.length} 筆紀錄嗎？此動作無法復原，將清空所有月份的資料。`)) return;
+    if(!confirm('再次確認：這會清空所有資料，真的要繼續嗎？')) return;
+    records = [];
+    saveRecords(records);
+    monthSelectMode = false;
+    monthSelectedIds.clear();
+    monthSelectModeToggle.textContent = '選取刪除';
+    monthBulkDeleteBar.classList.add('hidden');
+    renderAllRecords();
+    renderMonth();
+  });
+
+  monthDeleteSelectedBtn.addEventListener('click', ()=>{
+    if(monthSelectedIds.size === 0) return;
+    if(!confirm(`確定要刪除已選取的 ${monthSelectedIds.size} 筆紀錄嗎？此動作無法復原。`)) return;
+    records = records.filter(r => !monthSelectedIds.has(r.id));
+    saveRecords(records);
+    monthSelectMode = false;
+    monthSelectedIds.clear();
+    monthSelectModeToggle.textContent = '選取刪除';
+    monthBulkDeleteBar.classList.add('hidden');
+    renderAllRecords();
+    renderMonth();
+  });
+
+  function updateMonthSelectedCount(){
+    monthSelectedCountEl.textContent = monthSelectedIds.size;
+    monthDeleteSelectedBtn.disabled = monthSelectedIds.size === 0;
+    monthDeleteSelectedBtn.style.opacity = monthSelectedIds.size === 0 ? '0.5' : '1';
+  }
+
+  function renderMonth(){
+    document.getElementById('monthLabel').textContent = `${viewYear}年 ${String(viewMonth+1).padStart(2,'0')}月`;
+    document.getElementById('monthPicker').value = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+
+    const items = [];
+    records.forEach(r => {
+      const d = new Date(r.date + 'T00:00:00');
+      const recKey = ymKey(d.getFullYear(), d.getMonth());
+      const viewKey = ymKey(viewYear, viewMonth);
+      const diff = viewKey - recKey;
+      if(diff >= 0 && diff < r.installments){
+        items.push({
+          record: r,
+          period: diff + 1,
+          amount: perPeriodAmount(r, diff + 1),
+        });
+      }
+    });
+
+    items.sort((a,b) => b.amount - a.amount);
+
+    const total = items.reduce((s,i) => s + i.amount, 0);
+    document.getElementById('monthTotal').textContent = fmtMoney(total);
+    document.getElementById('monthCount').textContent = `共 ${items.length} 筆`;
+
+    const list = document.getElementById('monthList');
+    const empty = document.getElementById('monthEmpty');
+    list.innerHTML = '';
+    empty.classList.toggle('hidden', items.length > 0);
+
+    items.forEach(it => {
+      const r = it.record;
+      const isOneTime = r.installments === 1;
+      const pct = Math.round((it.period / r.installments) * 100);
+
+      const card = document.createElement('div');
+      card.className = 'tag-card stitch-edge p-4 rise-in cursor-pointer';
+      card.dataset.id = r.id;
+      card.dataset.period = it.period;
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-2.5 min-w-0">
+            ${monthSelectMode ? `<input type="checkbox" class="selChkM shrink-0 mt-0.5 w-4 h-4" data-id="${r.id}" ${monthSelectedIds.has(r.id) ? 'checked' : ''}>` : ''}
+            <div class="min-w-0">
+              <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}</p>
+              <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date}</p>
+            </div>
+          </div>
+          ${monthSelectMode ? '' : `
+          <button data-id="${r.id}" class="delBtnM btn-press shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style="background:rgba(180,83,42,0.14);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--rust)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>`}
+        </div>
+
+        <div class="flex items-end justify-between mt-3">
+          <span class="font-mono font-bold text-lg">${fmtMoney(it.amount)}</span>
+          <span class="text-xs font-display px-2 py-0.5 rounded" style="background:${isOneTime ? 'rgba(107,138,92,0.18); color:var(--sage)' : 'rgba(201,162,39,0.18); color:#8a6d10'};">
+            ${isOneTime ? '一次付清' : `第 ${it.period}/${r.installments} 期`}
+          </span>
+        </div>
+
+        ${isOneTime ? '' : `
+        <div class="progress-track h-1.5 mt-3">
+          <div class="progress-fill h-full" style="width:${pct}%;"></div>
+        </div>`}
+      `;
+      list.appendChild(card);
+    });
+
+    list.querySelectorAll('.delBtnM').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        deleteRecord(btn.dataset.id);
+      });
+    });
+    list.querySelectorAll('.selChkM').forEach(chk=>{
+      chk.addEventListener('click', (e)=> e.stopPropagation());
+      chk.addEventListener('change', ()=>{
+        if(chk.checked) monthSelectedIds.add(chk.dataset.id);
+        else monthSelectedIds.delete(chk.dataset.id);
+        updateMonthSelectedCount();
+      });
+    });
+    list.querySelectorAll('.tag-card').forEach(card=>{
+      card.addEventListener('click', ()=>{
+        if(monthSelectMode){
+          const chk = card.querySelector('.selChkM');
+          if(chk){
+            chk.checked = !chk.checked;
+            chk.dispatchEvent(new Event('change'));
+          }
+          return;
+        }
+        const rec = records.find(r => r.id === card.dataset.id);
+        if(rec) openDetail(rec, parseInt(card.dataset.period));
+      });
+    });
+  }
+
+  // ---------- Detail modal ----------
+  const detailModal = document.getElementById('detailModal');
+  const detailModalContent = document.getElementById('detailModalContent');
+
+  function closeDetail(){
+    detailModal.classList.add('hidden');
+  }
+  detailModal.addEventListener('click', (e)=>{
+    if(e.target === detailModal) closeDetail();
+  });
+
+  function openDetail(r, currentPeriod){
+    const isOneTime = r.installments === 1;
+
+    // 利率為 0（多半是手動匯入、沒有原始利率資料）且期數符合常見分期方案時，
+    // 用預設利率反推：r.amount 視為「實際已含息的總額」，往回推算未計息的原金額
+    const canInfer = r.rate === 0 && RATE_PRESETS.hasOwnProperty(r.installments);
+    const displayRate = canInfer ? RATE_PRESETS[r.installments] : r.rate;
+
+    let total, originalAmount, interest;
+    if(canInfer){
+      total = r.amount;
+      originalAmount = Math.round(r.amount / (1 + displayRate/100));
+      interest = total - originalAmount;
+    }else{
+      total = totalRounded(r);
+      originalAmount = r.amount;
+      interest = total - originalAmount;
+    }
+
+    const first = perPeriodAmount(r, 1);
+    const later = basePeriodAmount(r);
+
+    detailModalContent.innerHTML = `
+      <div class="tag-hole"></div>
+      <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">ITEM DETAIL</p>
+      <p class="text-lg font-semibold mb-4 pr-6">${escapeHtml(r.name)}</p>
+
+      <div class="space-y-2.5 text-sm">
+        <div class="flex justify-between"><span class="opacity-60">購買日期</span><span class="font-mono">${r.date}</span></div>
+        <div class="flex justify-between"><span class="opacity-60">分期方式</span><span class="font-mono">${isOneTime ? '一次付清' : `${r.installments} 期`}</span></div>
+        ${!isOneTime ? `<div class="flex justify-between"><span class="opacity-60">目前進度</span><span class="font-mono">第 ${currentPeriod}/${r.installments} 期</span></div>` : ''}
+        <div class="flex justify-between"><span class="opacity-60">該筆利率</span><span class="font-mono">${displayRate}%${canInfer ? ' (推斷)' : ''}</span></div>
+      </div>
+
+      <div class="stitch-line my-4"></div>
+
+      <div class="space-y-2.5 text-sm">
+        <div class="flex justify-between"><span class="opacity-60">原金額（未計利息）${canInfer ? '<span class="opacity-70">＊推算</span>' : ''}</span><span class="font-mono">${fmtMoney(originalAmount)}</span></div>
+        <div class="flex justify-between"><span class="opacity-60">利息</span><span class="font-mono" style="color:var(--rust);">${interest > 0 ? '+' + fmtMoney(interest) : fmtMoney(0)}</span></div>
+        <div class="flex justify-between"><span class="font-semibold">總金額（含息）</span><span class="font-mono font-bold text-base">${fmtMoney(total)}</span></div>
+        ${!isOneTime ? `
+        <div class="flex justify-between pt-1"><span class="opacity-60">首期應繳</span><span class="font-mono">${fmtMoney(first)}</span></div>
+        <div class="flex justify-between"><span class="opacity-60">後續每期應繳</span><span class="font-mono">${fmtMoney(later)}</span></div>` : ''}
+      </div>
+
+      ${canInfer ? `<p class="text-[11px] mt-3 opacity-50">＊此筆利率未記錄，依 ${r.installments} 期的常見利率（${displayRate}%）推算，僅供參考，不影響實際每期應繳金額</p>` : ''}
+
+      <button id="detailCloseBtn" class="btn-press w-full py-3 mt-5 rounded-lg font-display tracking-wide text-sm" style="background:var(--ink); color:var(--paper);">關閉</button>
+    `;
+    detailModal.classList.remove('hidden');
+    document.getElementById('detailCloseBtn').addEventListener('click', closeDetail);
+  }
+
+  // ---------- Batch import ----------
+  const importToggle = document.getElementById('importToggle');
+  const importPanel = document.getElementById('importPanel');
+  const importText = document.getElementById('importText');
+  const importResult = document.getElementById('importResult');
+
+  importToggle.addEventListener('click', ()=>{
+    importPanel.classList.toggle('hidden');
+    importResult.classList.add('hidden');
+  });
+  document.getElementById('importCancel').addEventListener('click', ()=>{
+    importPanel.classList.add('hidden');
+    importText.value = '';
+    importResult.classList.add('hidden');
+  });
+
+  function normalizeDate(str){
+    const m = str.trim().match(/^(\d{2}|\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+    if(!m) return null;
+    let y = m[1];
+    if(y.length === 2) y = '20' + y; // 24 → 2024
+    const mo = m[2].padStart(2,'0'), d = m[3].padStart(2,'0');
+    const dt = new Date(`${y}-${mo}-${d}T00:00:00`);
+    if(isNaN(dt.getTime())) return null;
+    return `${y}-${mo}-${d}`;
+  }
+  function normalizeAmount(str){
+    const cleaned = str.replace(/[$,\s]/g,'');
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? null : n;
+  }
+  function dateToYMD(d){
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  // 從某一期的日期往前推 delta 個月，估算購買（第 1 期）日期
+  function shiftMonths(ymd, delta){
+    const d = new Date(ymd + 'T00:00:00');
+    const targetMonthFirst = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+    const daysInTarget = new Date(targetMonthFirst.getFullYear(), targetMonthFirst.getMonth()+1, 0).getDate();
+    const day = Math.min(d.getDate(), daysInTarget);
+    return new Date(targetMonthFirst.getFullYear(), targetMonthFirst.getMonth(), day);
+  }
+
+  // 逐行解析：判斷是「逗號格式」還是「日期 品項 金額(期數 或 第幾期/總期數)」的空白格式
+  function parseRawLine(rawLine){
+    const line = rawLine.replace(/^[\s•・\-\*]+/, '').trim();
+    if(!line) return { skip: true };
+
+    if(line.includes(',') || line.includes('\t')){
+      const delim = line.includes('\t') ? '\t' : ',';
+      const fields = line.split(delim).map(s => s.trim());
+      if(fields.length < 3) return { error: '欄位不足（至少需要 品項,金額,日期）' };
+      const name = fields[0];
+      const amount = normalizeAmount(fields[1]);
+      const date = normalizeDate(fields[2]);
+      const installments = fields[3] ? Math.max(parseInt(fields[3]) || 1, 1) : 1;
+      const rate = fields[4] ? (parseFloat(fields[4]) || 0) : 0;
+      if(!name) return { error: '品項名稱空白' };
+      if(amount === null) return { error: `金額無法辨識：「${fields[1]}」` };
+      if(!date) return { error: `日期無法辨識：「${fields[2]}」` };
+      return { type:'direct', name, amount, date, installments, rate };
+    }
+
+    // 空白格式：日期 品項 $金額(第幾期/總期數) 或 日期 品項 $金額(總期數) 或 日期 品項 $金額
+    // 安全檢查：如果一行內偵測到超過一個日期或超過一個金額符號，代表可能是換行遺失、
+    // 多筆資料被黏在同一行，直接回報錯誤，避免誤合併成一筆
+    const dateTokenMatches = line.match(/\b(\d{2}|\d{4})[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}\b/g) || [];
+    if(dateTokenMatches.length > 1){
+      return { error: '這行偵測到多個日期，可能是換行遺失導致多筆資料黏在一起，請確認每行只有一筆' };
+    }
+    const dollarSignCount = (line.match(/\$/g) || []).length;
+    if(dollarSignCount > 1){
+      return { error: '這行偵測到多個金額符號，可能是換行遺失導致多筆資料黏在一起，請確認每行只有一筆' };
+    }
+
+    const m = line.match(/^(\S+)\s+(.+?)\s+\$?([\d,]+(?:\.\d+)?)\s*(?:\((\d+)(?:\/(\d+))?\))?\s*$/);
+    if(!m) return { error: '看不懂這行的格式' };
+
+    const [, dateRaw, name, amountRaw, g4, g5] = m;
+    const date = normalizeDate(dateRaw);
+    const amount = normalizeAmount(amountRaw);
+    if(!date) return { error: `日期無法辨識：「${dateRaw}」` };
+    if(amount === null) return { error: `金額無法辨識：「${amountRaw}」` };
+    if(!name) return { error: '品項名稱空白' };
+
+    if(g4 && g5){
+      // 第幾期/總期數 → 這行的金額是「該期」的金額，之後要跟同品項的其他期合併
+      return { type:'period', name, date, amount, period: parseInt(g4), total: parseInt(g5) };
+    }
+    if(g4 && !g5){
+      // 金額(總期數) → 這行金額就是總金額
+      return { type:'direct', name, amount, date, installments: Math.max(parseInt(g4)||1,1), rate: 0 };
+    }
+    return { type:'direct', name, amount, date, installments: 1, rate: 0 };
+  }
+
+  document.getElementById('importRun').addEventListener('click', ()=>{
+    const lines = importText.value.split(/\r\n|\r|\n|\u2028|\u2029/);
+    const directRecords = [];
+    const periodEntries = []; // { name, date, amount, period, total, lineNum }
+    const errors = [];
+
+    lines.forEach((line, idx) => {
+      const res = parseRawLine(line);
+      if(res.skip) return;
+      if(res.error){
+        errors.push({ lineNum: idx+1, raw: line.trim(), message: res.error });
+        return;
+      }
+      if(res.type === 'direct'){
+        directRecords.push(res);
+      }else{
+        periodEntries.push({ ...res, lineNum: idx+1 });
+      }
+    });
+
+    // 依品項名稱分組，把分期的多行合併還原成一筆完整紀錄
+    const groups = {};
+    periodEntries.forEach(e => {
+      if(!groups[e.name]) groups[e.name] = [];
+      groups[e.name].push(e);
+    });
+
+    Object.keys(groups).forEach(name => {
+      const entries = groups[name].sort((a,b) => a.period - b.period);
+      const totals = [...new Set(entries.map(e => e.total))];
+      if(totals.length > 1){
+        const lns = entries.map(e => e.lineNum).join('、');
+        errors.push({ lineNum: null, raw: name, message: `總期數在多行中不一致（第 ${lns} 行），已略過，請確認後手動新增` });
+        return;
+      }
+      const totalPeriods = totals[0];
+      const period1 = entries.find(e => e.period === 1);
+      let purchaseDate;
+      if(period1){
+        purchaseDate = period1.date;
+      }else{
+        const earliest = entries[0];
+        purchaseDate = dateToYMD(shiftMonths(earliest.date, -(earliest.period - 1)));
+      }
+
+      // 若這個品項的每一期（1～總期數）都有記錄到，直接加總各期實際金額最準確
+      // （因為原本記錄的第 1 期金額可能已經含四捨五入的餘數，加總才能完整還原）
+      const periodsSet = new Set(entries.map(e => e.period));
+      const isComplete = entries.length === totalPeriods &&
+        Array.from({length: totalPeriods}, (_, i) => i + 1).every(p => periodsSet.has(p));
+
+      let totalAmount;
+      if(isComplete){
+        totalAmount = entries.reduce((s, e) => s + e.amount, 0);
+      }else{
+        // 資料不齊全（例如分期還沒繳完），退而用非第 1 期的金額回推估計總額
+        const nonFirst = entries.find(e => e.period !== 1);
+        const baseAmount = nonFirst ? nonFirst.amount : entries[0].amount;
+        totalAmount = Math.round(baseAmount * totalPeriods);
+      }
+
+      directRecords.push({
+        type: 'direct',
+        name,
+        amount: totalAmount,
+        date: purchaseDate,
+        installments: totalPeriods,
+        rate: 0,
+      });
+    });
+
+    let success = 0;
+    directRecords.forEach(r => {
+      records.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+        name: r.name, amount: r.amount, date: r.date, installments: r.installments, rate: r.rate
+      });
+      success++;
+    });
+
+    if(success > 0){
+      saveRecords(records);
+      renderAllRecords();
+      renderMonth();
+    }
+
+    importResult.classList.remove('hidden');
+    let html = `<p><span style="color:var(--sage);">✔ 成功匯入 ${success} 筆</span>${errors.length ? `　<span style="color:var(--rust);">✘ ${errors.length} 筆有問題</span>` : ''}</p>`;
+    if(errors.length){
+      html += `<div class="mt-2 max-h-52 overflow-y-auto space-y-1.5">`;
+      html += errors.map(err => `
+        <div class="px-2.5 py-2 rounded" style="background:rgba(180,83,42,0.12); border-left:2px solid var(--rust);">
+          <p style="color:var(--paper);">${err.lineNum ? `第 ${err.lineNum} 行　` : ''}${escapeHtml(err.raw || '')}</p>
+          <p style="color:rgba(244,239,227,0.55);">→ ${escapeHtml(err.message)}</p>
+        </div>
+      `).join('');
+      html += `</div>`;
+    }
+    importResult.innerHTML = html;
+
+    if(success > 0 && errors.length === 0){
+      importText.value = '';
+    }
+  });
+
+  // ---------- Init ----------
+  updatePreview();
+  renderAllRecords();
+  renderMonth();
+</script>
+
+</body>
+</html>
