@@ -110,9 +110,10 @@
 
   <!-- Tabs -->
   <nav class="px-5 pt-4">
-    <div class="grid grid-cols-2 gap-2 p-1 rounded-xl" style="background:rgba(244,239,227,0.06);">
-      <button id="tabBtnAdd" class="tab-btn active font-display text-sm py-2.5 rounded-lg btn-press">＋ 新增消費</button>
-      <button id="tabBtnOverview" class="tab-btn font-display text-sm py-2.5 rounded-lg btn-press">📅 每月總覽</button>
+    <div class="grid grid-cols-3 gap-2 p-1 rounded-xl" style="background:rgba(244,239,227,0.06);">
+      <button id="tabBtnAdd" class="tab-btn active font-display text-xs py-2.5 rounded-lg btn-press">＋ 新增</button>
+      <button id="tabBtnOverview" class="tab-btn font-display text-xs py-2.5 rounded-lg btn-press">📅 總覽</button>
+      <button id="tabBtnWishlist" class="tab-btn font-display text-xs py-2.5 rounded-lg btn-press">🌟 願望清單</button>
     </div>
   </nav>
 
@@ -158,6 +159,11 @@
           </div>
         </div>
         <p class="text-[11px] mb-4 opacity-50">常見期數會自動帶入預設利率：3期2%・6期4%・9期6%・12期7%（可自行修改）</p>
+
+        <label class="block text-xs font-medium mb-1 opacity-70">首期付款日期（選填）</label>
+        <input id="fFirstPaymentDate" type="date"
+          class="w-full mb-1 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+        <p class="text-[11px] mb-4 opacity-50">分期第一期實際扣款的日期，留空則預設與購買日期相同</p>
 
         <div class="stitch-line mb-4"></div>
 
@@ -308,6 +314,43 @@
       </div>
     </section>
 
+    <!-- ============ TAB 3: 願望清單 ============ -->
+    <section id="panelWishlist" class="hidden">
+      <form id="wishlistForm" class="tag-card stitch-edge p-5 rise-in mb-6">
+        <div class="tag-hole"></div>
+        <p class="font-display text-xs tracking-widest mb-3" style="color:var(--rust);">WISHLIST ITEM</p>
+
+        <label class="block text-xs font-medium mb-1 opacity-70">品項名稱</label>
+        <input id="wName" type="text" required placeholder="例如：Patagonia 刷毛外套"
+          class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+
+        <label class="block text-xs font-medium mb-1 opacity-70">類別</label>
+        <select id="wCategory" class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);"></select>
+
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label class="block text-xs font-medium mb-1 opacity-70">預估金額（選填）</label>
+            <input id="wPrice" type="number" min="0" step="1" placeholder="0"
+              class="w-full px-3 py-2.5 rounded-lg text-sm font-mono" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1 opacity-70">連結／備註（選填）</label>
+            <input id="wNote" type="text" placeholder="購買連結或備註"
+              class="w-full px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
+          </div>
+        </div>
+
+        <button type="submit" class="btn-press w-full py-3 rounded-lg font-display tracking-wide text-sm"
+          style="background:var(--ink); color:var(--paper);">
+          🌟 加入願望清單
+        </button>
+      </form>
+
+      <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">想買的東西 <span id="wishlistCount"></span></p>
+      <div id="wishlistList" class="space-y-2"></div>
+      <p id="wishlistEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">還沒有想買的東西 🌟</p>
+    </section>
+
   </main>
 </div>
 
@@ -318,6 +361,7 @@
 
 <script>
   const STORAGE_KEY = 'wardrobeLedgerRecords';
+  const WISHLIST_STORAGE_KEY = 'wardrobeLedgerWishlist';
 
   function loadRecords(){
     try{
@@ -328,6 +372,16 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   }
   let records = loadRecords();
+
+  function loadWishlist(){
+    try{
+      return JSON.parse(localStorage.getItem(WISHLIST_STORAGE_KEY)) || [];
+    }catch(e){ return []; }
+  }
+  function saveWishlist(list){
+    localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(list));
+  }
+  let wishlist = loadWishlist();
 
   // ---------- Helpers ----------
   function fmtMoney(n){
@@ -361,18 +415,21 @@
   function ymKey(y,m){ return y*12 + m; } // m: 0-11
 
   function tabSwitch(tab){
-    const isAdd = tab === 'add';
-    document.getElementById('panelAdd').classList.toggle('hidden', !isAdd);
-    document.getElementById('panelOverview').classList.toggle('hidden', isAdd);
-    document.getElementById('tabBtnAdd').classList.toggle('active', isAdd);
-    document.getElementById('tabBtnOverview').classList.toggle('active', !isAdd);
-    if(!isAdd) renderMonth();
+    document.getElementById('panelAdd').classList.toggle('hidden', tab !== 'add');
+    document.getElementById('panelOverview').classList.toggle('hidden', tab !== 'overview');
+    document.getElementById('panelWishlist').classList.toggle('hidden', tab !== 'wishlist');
+    document.getElementById('tabBtnAdd').classList.toggle('active', tab === 'add');
+    document.getElementById('tabBtnOverview').classList.toggle('active', tab === 'overview');
+    document.getElementById('tabBtnWishlist').classList.toggle('active', tab === 'wishlist');
+    if(tab === 'overview') renderMonth();
+    if(tab === 'wishlist') renderWishlist();
   }
   document.getElementById('tabBtnAdd').addEventListener('click', ()=>tabSwitch('add'));
   document.getElementById('tabBtnOverview').addEventListener('click', ()=>tabSwitch('overview'));
+  document.getElementById('tabBtnWishlist').addEventListener('click', ()=>tabSwitch('wishlist'));
 
   // ---------- Add form ----------
-  const CATEGORIES = ['外套','長袖Tee','短袖Tee','襯衫','長褲','短褲','鞋子','帽子','襪子','飾品','運費','其他'];
+  const CATEGORIES = ['外套','長袖Tee','短袖Tee','襯衫','長褲','短褲','鞋子','帽子','襪子','飾品','包包','配件','內著','跑步用品','運費','綜合(未拆分)','其他'];
   // 年度總覽的類別分組：上衣／下裝各自合併，其餘類別維持獨立
   const CATEGORY_GROUPS = {
     '長袖Tee': '上衣', '短袖Tee': '上衣', '襯衫': '上衣',
@@ -384,11 +441,16 @@
   function recCategory(r){
     return r.category || '其他';
   }
+  // 分期起算基準日：優先用「首期付款日期」，沒填就用購買日期
+  function periodBaseDate(r){
+    return r.firstPaymentDate || r.date;
+  }
 
   const fName = document.getElementById('fName');
   const fCategory = document.getElementById('fCategory');
   const fAmount = document.getElementById('fAmount');
   const fDate = document.getElementById('fDate');
+  const fFirstPaymentDate = document.getElementById('fFirstPaymentDate');
   const fInstallments = document.getElementById('fInstallments');
   const fRate = document.getElementById('fRate');
   const previewFirstPeriod = document.getElementById('previewFirstPeriod');
@@ -437,6 +499,7 @@
       installments: Math.max(parseInt(fInstallments.value) || 1, 1),
       rate: parseFloat(fRate.value) || 0,
     };
+    if(fFirstPaymentDate.value) record.firstPaymentDate = fFirstPaymentDate.value;
     if(!record.name || !record.amount || !record.date){ return; }
 
     records.push(record);
@@ -449,6 +512,7 @@
     fInstallments.value = 1;
     fRate.value = 0;
     fDate.value = new Date().toISOString().slice(0,10);
+    fFirstPaymentDate.value = '';
     updatePreview();
 
     renderAllRecords();
@@ -614,7 +678,7 @@
 
     const items = [];
     records.forEach(r => {
-      const d = new Date(r.date + 'T00:00:00');
+      const d = new Date(periodBaseDate(r) + 'T00:00:00');
       const recKey = ymKey(d.getFullYear(), d.getMonth());
       const viewKey = ymKey(viewYear, viewMonth);
       const diff = viewKey - recKey;
@@ -749,7 +813,7 @@
 
     records.forEach(r => {
       for(let p = 1; p <= r.installments; p++){
-        const d = shiftMonths(r.date, p - 1);
+        const d = shiftMonths(periodBaseDate(r), p - 1);
         if(d.getFullYear() === viewYearOnly){
           const amt = perPeriodAmount(r, p);
           monthlyTotals[d.getMonth()] += amt;
@@ -770,8 +834,8 @@
     monthBarsWrap.innerHTML = monthlyTotals.map((amt, i) => `
       <div>
         <div class="flex justify-between text-xs mb-1">
-          <span class="opacity-60">${MONTH_NAMES[i]}</span>
-          <span class="font-mono">${fmtMoney(amt)}</span>
+          <span style="color:rgba(244,239,227,0.65);">${MONTH_NAMES[i]}</span>
+          <span class="font-mono" style="color:var(--paper);">${fmtMoney(amt)}</span>
         </div>
         <div class="progress-track h-2">
           <div class="progress-fill h-full" style="width:${amt > 0 ? Math.max((amt/maxMonth)*100, 3) : 0}%;"></div>
@@ -789,8 +853,8 @@
       return `
       <div>
         <div class="flex justify-between text-xs mb-1">
-          <span class="opacity-70">${escapeHtml(cat)}</span>
-          <span class="font-mono">${fmtMoney(amt)} ・ ${pct}%</span>
+          <span style="color:rgba(244,239,227,0.75);">${escapeHtml(cat)}</span>
+          <span class="font-mono" style="color:var(--paper);">${fmtMoney(amt)} ・ ${pct}%</span>
         </div>
         <div class="progress-track h-2">
           <div class="h-full" style="width:${pct}%; background:var(--thread);"></div>
@@ -862,6 +926,7 @@
       <div class="space-y-2.5 text-sm">
         <div class="flex justify-between"><span class="opacity-60">類別</span><span class="font-mono">${escapeHtml(recCategory(r))}</span></div>
         <div class="flex justify-between"><span class="opacity-60">購買日期</span><span class="font-mono">${r.date}</span></div>
+        ${!isOneTime && r.firstPaymentDate && r.firstPaymentDate !== r.date ? `<div class="flex justify-between"><span class="opacity-60">首期付款日期</span><span class="font-mono">${r.firstPaymentDate}</span></div>` : ''}
         <div class="flex justify-between"><span class="opacity-60">分期方式</span><span class="font-mono">${isOneTime ? '一次付清' : `${r.installments} 期`}</span></div>
         ${!isOneTime ? `<div class="flex justify-between"><span class="opacity-60">目前進度</span><span class="font-mono">第 ${currentPeriod}/${r.installments} 期</span></div>` : ''}
         <div class="flex justify-between"><span class="opacity-60">該筆利率</span><span class="font-mono">${r.customAmounts ? '（依實際金額，不適用）' : `${displayRate}%${canInfer ? ' (推斷)' : ''}`}</span></div>
@@ -915,6 +980,10 @@
           <div>
             <label class="block text-xs opacity-60 mb-1">購買日期</label>
             <input id="editDate" type="date" value="${r.date}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+          <div>
+            <label class="block text-xs opacity-60 mb-1">首期付款日期（選填，留空＝同購買日期）</label>
+            <input id="editFirstPaymentDate" type="date" value="${r.firstPaymentDate || ''}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
           </div>
           <div>
             <label class="block text-xs opacity-60 mb-1">分期期數${editMode==='custom' ? '（逐期模式下，如需變更期數請先改用公式計算）' : ''}</label>
@@ -984,6 +1053,7 @@
         const name = document.getElementById('editName').value.trim();
         const category = document.getElementById('editCategory').value;
         const date = document.getElementById('editDate').value;
+        const firstPaymentDate = document.getElementById('editFirstPaymentDate').value;
         if(!name || !date){ alert('品項名稱與購買日期不能空白'); return; }
 
         const idx = records.findIndex(rec => rec.id === r.id);
@@ -1006,6 +1076,9 @@
           delete updated.customAmounts;
           records[idx] = updated;
         }
+        if(firstPaymentDate) records[idx].firstPaymentDate = firstPaymentDate;
+        else delete records[idx].firstPaymentDate;
+
         saveRecords(records);
         renderAllRecords();
         renderMonth();
@@ -1229,10 +1302,115 @@
     }
   });
 
+  // ---------- Wishlist ----------
+  const wName = document.getElementById('wName');
+  const wCategory = document.getElementById('wCategory');
+  const wPrice = document.getElementById('wPrice');
+  const wNote = document.getElementById('wNote');
+
+  CATEGORIES.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    wCategory.appendChild(opt);
+  });
+
+  document.getElementById('wishlistForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const item = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      name: wName.value.trim(),
+      category: wCategory.value || '其他',
+      price: wPrice.value ? parseFloat(wPrice.value) : null,
+      note: wNote.value.trim(),
+      addedDate: new Date().toISOString().slice(0,10),
+    };
+    if(!item.name) return;
+
+    wishlist.push(item);
+    saveWishlist(wishlist);
+
+    wName.value = '';
+    wCategory.value = '其他';
+    wPrice.value = '';
+    wNote.value = '';
+
+    renderWishlist();
+  });
+
+  function isUrl(str){
+    return /^https?:\/\//i.test(str.trim());
+  }
+
+  function deleteWishlistItem(id){
+    if(!confirm('確定要從願望清單刪除這一項嗎？')) return;
+    wishlist = wishlist.filter(w => w.id !== id);
+    saveWishlist(wishlist);
+    renderWishlist();
+  }
+
+  function convertWishlistItem(id){
+    const item = wishlist.find(w => w.id === id);
+    if(!item) return;
+    if(!confirm(`把「${item.name}」轉為已購買，加到新增消費表單嗎？（會從願望清單移除）`)) return;
+
+    // 帶入新增消費表單
+    fName.value = item.name;
+    fCategory.value = item.category || '其他';
+    fAmount.value = item.price || '';
+    fDate.value = new Date().toISOString().slice(0,10);
+    updatePreview();
+
+    wishlist = wishlist.filter(w => w.id !== id);
+    saveWishlist(wishlist);
+    renderWishlist();
+    tabSwitch('add');
+  }
+
+  function renderWishlist(){
+    const wrap = document.getElementById('wishlistList');
+    const empty = document.getElementById('wishlistEmpty');
+    wrap.innerHTML = '';
+
+    const sorted = [...wishlist].sort((a,b) => b.addedDate.localeCompare(a.addedDate));
+    document.getElementById('wishlistCount').textContent = sorted.length > 0 ? `（${sorted.length} 項）` : '';
+    empty.classList.toggle('hidden', sorted.length > 0);
+
+    sorted.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'tag-card stitch-edge p-4 rise-in';
+      card.innerHTML = `
+        <div class="tag-hole"></div>
+        <div class="flex items-start justify-between gap-3 pr-6">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold truncate">${escapeHtml(item.name)}</p>
+            <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(item.category)}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
+            ${item.note ? (isUrl(item.note)
+              ? `<a href="${escapeHtml(item.note)}" target="_blank" rel="noopener" class="text-xs underline mt-1 inline-block" style="color:var(--rust);">🔗 查看連結</a>`
+              : `<p class="text-xs opacity-60 mt-1">${escapeHtml(item.note)}</p>`) : ''}
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button data-id="${item.id}" class="convertBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:var(--sage); color:var(--ink);">🛒 已購買</button>
+          <button data-id="${item.id}" class="delWishBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">刪除</button>
+        </div>
+      `;
+      wrap.appendChild(card);
+    });
+
+    wrap.querySelectorAll('.convertBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=> convertWishlistItem(btn.dataset.id));
+    });
+    wrap.querySelectorAll('.delWishBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=> deleteWishlistItem(btn.dataset.id));
+    });
+  }
+
   // ---------- Init ----------
   updatePreview();
   renderAllRecords();
   renderMonth();
+  renderWishlist();
 </script>
 
 </body>
