@@ -211,10 +211,13 @@
 
       <!-- All records management -->
       <div class="mt-6">
-        <button id="allRecordsToggle" type="button" class="w-full flex items-center justify-between px-1 py-1 btn-press">
-          <p class="font-display text-xs tracking-widest" style="color:rgba(244,239,227,0.45);">所有紀錄 <span id="allRecordsCount"></span></p>
-          <svg id="allRecordsChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(244,239,227,0.45)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition: transform .2s;"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
+        <div class="flex items-center justify-between">
+          <button id="allRecordsToggle" type="button" class="flex items-center gap-1.5 btn-press">
+            <p class="font-display text-xs tracking-widest" style="color:rgba(244,239,227,0.45);">所有紀錄 <span id="allRecordsCount"></span></p>
+            <svg id="allRecordsChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(244,239,227,0.45)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition: transform .2s;"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <button id="allRecordsDeleteAllBtn" type="button" class="hidden text-[11px] underline" style="color:var(--rust);">清空全部</button>
+        </div>
         <p class="text-[11px] mt-1 px-1 opacity-40">點單筆右側垃圾桶圖示可刪除該筆輸入紀錄</p>
         <div id="allRecordsList" class="hidden space-y-2 mt-2 max-h-80 overflow-y-auto pr-0.5"></div>
         <p id="allRecordsEmpty" class="text-center text-sm py-6" style="color:rgba(244,239,227,0.35);">尚未新增任何紀錄</p>
@@ -288,17 +291,29 @@
     return '$' + Math.round(n).toLocaleString('en-US');
   }
   // 總金額（含利率）四捨五入後，平均攤分到每一期；除不盡的餘數計入第 1 期
+  // 若紀錄帶有 customAmounts（逐期實際金額，例如批次匯入時完整還原的資料），一律優先採用，不重新計算
   function totalRounded(r){
+    if(r.customAmounts) return r.customAmounts.reduce((s,a) => s + a, 0);
     return Math.round(r.amount * (1 + r.rate/100));
   }
   function basePeriodAmount(r){
+    if(r.customAmounts) return r.customAmounts[1] !== undefined ? r.customAmounts[1] : r.customAmounts[0];
     return Math.floor(totalRounded(r) / r.installments);
   }
   function perPeriodAmount(r, period){
+    if(r.customAmounts && r.customAmounts[period-1] !== undefined){
+      return r.customAmounts[period-1];
+    }
     const total = totalRounded(r);
-    const base = basePeriodAmount(r);
+    const base = Math.floor(total / r.installments);
     const remainder = total - base * r.installments;
     return period === 1 ? base + remainder : base;
+  }
+  // 是否每期金額都一樣（第 1 期以外）；不一樣的話「所有紀錄」預覽要用不同文字表示
+  function hasUniformLaterPeriods(r){
+    if(!r.customAmounts || r.customAmounts.length <= 1) return true;
+    const later = r.customAmounts.slice(1);
+    return later.every(a => a === later[0]);
   }
   function ymKey(y,m){ return y*12 + m; } // m: 0-11
 
@@ -382,14 +397,25 @@
     renderMonth();
   }
 
-  // ---------- All records list (in Add tab) — 僅提供單筆刪除，管理輸入紀錄本身 ----------
+  // ---------- All records list (in Add tab) — 管理輸入紀錄本身 ----------
   const allRecordsList = document.getElementById('allRecordsList');
   const allRecordsToggle = document.getElementById('allRecordsToggle');
   const allRecordsChevron = document.getElementById('allRecordsChevron');
+  const allRecordsDeleteAllBtn = document.getElementById('allRecordsDeleteAllBtn');
 
   allRecordsToggle.addEventListener('click', ()=>{
     const isHidden = allRecordsList.classList.toggle('hidden');
     allRecordsChevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+  });
+
+  allRecordsDeleteAllBtn.addEventListener('click', ()=>{
+    if(records.length === 0) return;
+    if(!confirm(`確定要刪除全部 ${records.length} 筆紀錄嗎？此動作無法復原，每月總覽的資料也會一併清空。`)) return;
+    if(!confirm('再次確認：這會清空所有資料，真的要繼續嗎？')) return;
+    records = [];
+    saveRecords(records);
+    renderAllRecords();
+    renderMonth();
   });
 
   function renderAllRecords(){
@@ -401,13 +427,17 @@
     document.getElementById('allRecordsCount').textContent = sorted.length > 0 ? `（${sorted.length} 筆）` : '';
     empty.classList.toggle('hidden', sorted.length > 0);
     allRecordsToggle.classList.toggle('hidden', sorted.length === 0);
+    allRecordsDeleteAllBtn.classList.toggle('hidden', sorted.length === 0);
 
     sorted.forEach(r => {
       const first = perPeriodAmount(r, 1);
       const later = basePeriodAmount(r);
+      const uniform = hasUniformLaterPeriods(r);
       const detail = r.installments === 1
         ? `一次付清 ・ ${fmtMoney(first)}`
-        : `${r.installments} 期 ・ 首期 ${fmtMoney(first)} ・ 之後每期 ${fmtMoney(later)}`;
+        : uniform
+          ? `${r.installments} 期 ・ 首期 ${fmtMoney(first)} ・ 之後每期 ${fmtMoney(later)}`
+          : `${r.installments} 期 ・ 各期金額如實記錄（點擊可查看）`;
       const div = document.createElement('div');
       div.className = 'flex items-center justify-between px-4 py-3 rounded-lg';
       div.style.background = 'rgba(244,239,227,0.06)';
@@ -627,7 +657,7 @@
 
     // 利率為 0（多半是手動匯入、沒有原始利率資料）且期數符合常見分期方案時，
     // 用預設利率反推：r.amount 視為「實際已含息的總額」，往回推算未計息的原金額
-    const canInfer = r.rate === 0 && RATE_PRESETS.hasOwnProperty(r.installments);
+    const canInfer = !r.customAmounts && r.rate === 0 && RATE_PRESETS.hasOwnProperty(r.installments);
     const displayRate = canInfer ? RATE_PRESETS[r.installments] : r.rate;
 
     let total, originalAmount, interest;
@@ -643,6 +673,27 @@
 
     const first = perPeriodAmount(r, 1);
     const later = basePeriodAmount(r);
+    const uniform = hasUniformLaterPeriods(r);
+
+    let scheduleHtml = '';
+    if(!isOneTime){
+      if(r.customAmounts){
+        scheduleHtml = `
+        <p class="text-xs opacity-60 mt-1 mb-1.5">逐期金額（如實記錄）</p>
+        <div class="space-y-1 max-h-40 overflow-y-auto pr-0.5">
+          ${r.customAmounts.map((amt,i) => `
+            <div class="flex justify-between text-sm px-2 py-1 rounded ${i+1===currentPeriod ? 'font-semibold' : ''}" style="${i+1===currentPeriod ? 'background:rgba(201,162,39,0.15);' : ''}">
+              <span class="opacity-70">第 ${i+1}/${r.installments} 期</span>
+              <span class="font-mono">${fmtMoney(amt)}</span>
+            </div>
+          `).join('')}
+        </div>`;
+      }else{
+        scheduleHtml = `
+        <div class="flex justify-between pt-1"><span class="opacity-60">首期應繳</span><span class="font-mono">${fmtMoney(first)}</span></div>
+        <div class="flex justify-between"><span class="opacity-60">後續每期應繳</span><span class="font-mono">${uniform ? fmtMoney(later) : '各期不同'}</span></div>`;
+      }
+    }
 
     detailModalContent.innerHTML = `
       <div class="tag-hole"></div>
@@ -653,7 +704,7 @@
         <div class="flex justify-between"><span class="opacity-60">購買日期</span><span class="font-mono">${r.date}</span></div>
         <div class="flex justify-between"><span class="opacity-60">分期方式</span><span class="font-mono">${isOneTime ? '一次付清' : `${r.installments} 期`}</span></div>
         ${!isOneTime ? `<div class="flex justify-between"><span class="opacity-60">目前進度</span><span class="font-mono">第 ${currentPeriod}/${r.installments} 期</span></div>` : ''}
-        <div class="flex justify-between"><span class="opacity-60">該筆利率</span><span class="font-mono">${displayRate}%${canInfer ? ' (推斷)' : ''}</span></div>
+        <div class="flex justify-between"><span class="opacity-60">該筆利率</span><span class="font-mono">${r.customAmounts ? '（依實際金額，不適用）' : `${displayRate}%${canInfer ? ' (推斷)' : ''}`}</span></div>
       </div>
 
       <div class="stitch-line my-4"></div>
@@ -662,17 +713,140 @@
         <div class="flex justify-between"><span class="opacity-60">原金額（未計利息）${canInfer ? '<span class="opacity-70">＊推算</span>' : ''}</span><span class="font-mono">${fmtMoney(originalAmount)}</span></div>
         <div class="flex justify-between"><span class="opacity-60">利息</span><span class="font-mono" style="color:var(--rust);">${interest > 0 ? '+' + fmtMoney(interest) : fmtMoney(0)}</span></div>
         <div class="flex justify-between"><span class="font-semibold">總金額（含息）</span><span class="font-mono font-bold text-base">${fmtMoney(total)}</span></div>
-        ${!isOneTime ? `
-        <div class="flex justify-between pt-1"><span class="opacity-60">首期應繳</span><span class="font-mono">${fmtMoney(first)}</span></div>
-        <div class="flex justify-between"><span class="opacity-60">後續每期應繳</span><span class="font-mono">${fmtMoney(later)}</span></div>` : ''}
+        ${scheduleHtml}
       </div>
 
       ${canInfer ? `<p class="text-[11px] mt-3 opacity-50">＊此筆利率未記錄，依 ${r.installments} 期的常見利率（${displayRate}%）推算，僅供參考，不影響實際每期應繳金額</p>` : ''}
 
-      <button id="detailCloseBtn" class="btn-press w-full py-3 mt-5 rounded-lg font-display tracking-wide text-sm" style="background:var(--ink); color:var(--paper);">關閉</button>
+      <div class="flex gap-2 mt-5">
+        <button id="detailEditBtn" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--thread); color:var(--ink);">✏️ 編輯</button>
+        <button id="detailCloseBtn" class="btn-press px-5 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--ink); color:var(--paper);">關閉</button>
+      </div>
     `;
     detailModal.classList.remove('hidden');
     document.getElementById('detailCloseBtn').addEventListener('click', closeDetail);
+    document.getElementById('detailEditBtn').addEventListener('click', ()=> openEdit(r, currentPeriod));
+  }
+
+  // ---------- Edit form (in modal) ----------
+  function openEdit(r, currentPeriod){
+    let editMode = r.customAmounts ? 'custom' : 'formula';
+    let editInstallments = r.installments;
+    let editCustomAmounts = r.customAmounts
+      ? [...r.customAmounts]
+      : Array.from({length: r.installments}, (_, i) => perPeriodAmount(r, i+1));
+
+    function renderEditForm(){
+      detailModalContent.innerHTML = `
+        <div class="tag-hole"></div>
+        <p class="font-display text-xs tracking-widest mb-3" style="color:var(--rust);">EDIT ITEM</p>
+
+        <div class="space-y-3 text-sm">
+          <div>
+            <label class="block text-xs opacity-60 mb-1">品項名稱</label>
+            <input id="editName" type="text" value="${escapeHtml(r.name)}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+          <div>
+            <label class="block text-xs opacity-60 mb-1">購買日期</label>
+            <input id="editDate" type="date" value="${r.date}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+          <div>
+            <label class="block text-xs opacity-60 mb-1">分期期數${editMode==='custom' ? '（逐期模式下，如需變更期數請先改用公式計算）' : ''}</label>
+            <input id="editInstallments" type="number" min="1" value="${editInstallments}" ${editMode==='custom' ? 'disabled' : ''}
+              class="w-full px-3 py-2 rounded-lg text-sm font-mono" style="background:${editMode==='custom' ? 'rgba(15,27,45,0.06)' : '#fff'};color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+
+          ${editMode === 'formula' ? `
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs opacity-60 mb-1">原金額</label>
+              <input id="editAmount" type="number" min="0" value="${r.amount}" class="w-full px-3 py-2 rounded-lg text-sm font-mono" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+            </div>
+            <div>
+              <label class="block text-xs opacity-60 mb-1">該筆利率%</label>
+              <input id="editRate" type="number" min="0" step="0.01" value="${r.rate}" class="w-full px-3 py-2 rounded-lg text-sm font-mono" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+            </div>
+          </div>
+          <button id="editSwitchToCustom" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">改用逐期手動輸入金額</button>
+          ` : `
+          <div>
+            <p class="text-xs opacity-60 mb-1.5">逐期實際金額（直接修改，不套用公式）</p>
+            <div class="space-y-1.5 max-h-52 overflow-y-auto pr-0.5">
+              ${editCustomAmounts.map((amt,i) => `
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono opacity-50 w-16 shrink-0">第 ${i+1}/${editInstallments} 期</span>
+                  <input type="number" class="editPeriodAmt flex-1 px-2 py-1.5 rounded text-sm font-mono" data-idx="${i}" value="${amt}" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <button id="editSwitchToFormula" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">改用公式計算（清除逐期金額）</button>
+          `}
+        </div>
+
+        <div class="flex gap-2 mt-5">
+          <button id="editSaveBtn" type="button" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--sage); color:var(--ink);">儲存</button>
+          <button id="editCancelBtn" type="button" class="btn-press px-4 py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(244,239,227,0.1); color:var(--paper);">取消</button>
+        </div>
+      `;
+
+      if(editMode === 'formula'){
+        document.getElementById('editSwitchToCustom').addEventListener('click', ()=>{
+          const inst = Math.max(parseInt(document.getElementById('editInstallments').value) || 1, 1);
+          const amt = parseFloat(document.getElementById('editAmount').value) || 0;
+          const rate = parseFloat(document.getElementById('editRate').value) || 0;
+          const tempRecord = { amount: amt, rate, installments: inst };
+          editCustomAmounts = Array.from({length: inst}, (_, i) => perPeriodAmount(tempRecord, i+1));
+          editInstallments = inst;
+          editMode = 'custom';
+          renderEditForm();
+        });
+      }else{
+        document.getElementById('editSwitchToFormula').addEventListener('click', ()=>{
+          editMode = 'formula';
+          renderEditForm();
+        });
+        detailModalContent.querySelectorAll('.editPeriodAmt').forEach(inp=>{
+          inp.addEventListener('input', ()=>{
+            editCustomAmounts[parseInt(inp.dataset.idx)] = parseFloat(inp.value) || 0;
+          });
+        });
+      }
+
+      document.getElementById('editCancelBtn').addEventListener('click', ()=> openDetail(r, currentPeriod));
+      document.getElementById('editSaveBtn').addEventListener('click', ()=>{
+        const name = document.getElementById('editName').value.trim();
+        const date = document.getElementById('editDate').value;
+        if(!name || !date){ alert('品項名稱與購買日期不能空白'); return; }
+
+        const idx = records.findIndex(rec => rec.id === r.id);
+        if(idx === -1) return;
+
+        if(editMode === 'custom'){
+          records[idx] = {
+            ...records[idx],
+            name, date,
+            installments: editInstallments,
+            amount: editCustomAmounts.reduce((s,a) => s + a, 0),
+            rate: 0,
+            customAmounts: [...editCustomAmounts],
+          };
+        }else{
+          const inst = Math.max(parseInt(document.getElementById('editInstallments').value) || 1, 1);
+          const amt = parseFloat(document.getElementById('editAmount').value) || 0;
+          const rate = parseFloat(document.getElementById('editRate').value) || 0;
+          const updated = { ...records[idx], name, date, installments: inst, amount: amt, rate };
+          delete updated.customAmounts;
+          records[idx] = updated;
+        }
+        saveRecords(records);
+        renderAllRecords();
+        renderMonth();
+        closeDetail();
+      });
+    }
+
+    renderEditForm();
   }
 
   // ---------- Batch import ----------
@@ -683,12 +857,10 @@
 
   importToggle.addEventListener('click', ()=>{
     importPanel.classList.toggle('hidden');
-    importResult.classList.add('hidden');
   });
   document.getElementById('importCancel').addEventListener('click', ()=>{
     importPanel.classList.add('hidden');
     importText.value = '';
-    importResult.classList.add('hidden');
   });
 
   function normalizeDate(str){
@@ -720,7 +892,9 @@
 
   // 逐行解析：判斷是「逗號格式」還是「日期 品項 金額(期數 或 第幾期/總期數)」的空白格式
   function parseRawLine(rawLine){
-    const line = rawLine.replace(/^[\s•・\-\*]+/, '').trim();
+    // 先做 NFKC 正規化：把全形括號／斜線／錢字號／數字等（常見於中文輸入法自動轉換）轉成半形，
+    // 避免因為看起來一樣、實際字元不同而判斷失敗
+    const line = rawLine.normalize('NFKC').replace(/^[\s•・\-\*]+/, '').trim();
     if(!line) return { skip: true };
 
     if(line.includes(',') || line.includes('\t')){
@@ -816,17 +990,19 @@
         purchaseDate = dateToYMD(shiftMonths(earliest.date, -(earliest.period - 1)));
       }
 
-      // 若這個品項的每一期（1～總期數）都有記錄到，直接加總各期實際金額最準確
-      // （因為原本記錄的第 1 期金額可能已經含四捨五入的餘數，加總才能完整還原）
+      // 若這個品項的每一期（1～總期數）都有記錄到，直接保留你輸入的每期實際金額，
+      // 不套用公式重新平均分攤——完全依照原始紀錄顯示
       const periodsSet = new Set(entries.map(e => e.period));
       const isComplete = entries.length === totalPeriods &&
         Array.from({length: totalPeriods}, (_, i) => i + 1).every(p => periodsSet.has(p));
 
-      let totalAmount;
+      let totalAmount, customAmounts;
       if(isComplete){
-        totalAmount = entries.reduce((s, e) => s + e.amount, 0);
+        const sorted = [...entries].sort((a,b) => a.period - b.period);
+        customAmounts = sorted.map(e => e.amount);
+        totalAmount = customAmounts.reduce((s, a) => s + a, 0);
       }else{
-        // 資料不齊全（例如分期還沒繳完），退而用非第 1 期的金額回推估計總額
+        // 資料不齊全（例如分期還沒繳完），退而用非第 1 期的金額回推估計總額，之後仍套用公式平均分攤
         const nonFirst = entries.find(e => e.period !== 1);
         const baseAmount = nonFirst ? nonFirst.amount : entries[0].amount;
         totalAmount = Math.round(baseAmount * totalPeriods);
@@ -839,15 +1015,18 @@
         date: purchaseDate,
         installments: totalPeriods,
         rate: 0,
+        customAmounts,
       });
     });
 
     let success = 0;
     directRecords.forEach(r => {
-      records.push({
+      const rec = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
         name: r.name, amount: r.amount, date: r.date, installments: r.installments, rate: r.rate
-      });
+      };
+      if(r.customAmounts) rec.customAmounts = r.customAmounts;
+      records.push(rec);
       success++;
     });
 
@@ -858,7 +1037,10 @@
     }
 
     importResult.classList.remove('hidden');
-    let html = `<p><span style="color:var(--sage);">✔ 成功匯入 ${success} 筆</span>${errors.length ? `　<span style="color:var(--rust);">✘ ${errors.length} 筆有問題</span>` : ''}</p>`;
+    let html = `<div class="flex items-start justify-between gap-2">
+      <p><span style="color:var(--sage);">✔ 成功匯入 ${success} 筆</span>${errors.length ? `　<span style="color:var(--rust);">✘ ${errors.length} 筆有問題</span>` : ''}</p>
+      <button id="importResultClose" type="button" class="shrink-0 opacity-50" style="color:var(--paper);">✕</button>
+    </div>`;
     if(errors.length){
       html += `<div class="mt-2 max-h-52 overflow-y-auto space-y-1.5">`;
       html += errors.map(err => `
@@ -870,6 +1052,10 @@
       html += `</div>`;
     }
     importResult.innerHTML = html;
+    document.getElementById('importResultClose').addEventListener('click', ()=>{
+      importResult.classList.add('hidden');
+      importResult.innerHTML = '';
+    });
 
     if(success > 0 && errors.length === 0){
       importText.value = '';
