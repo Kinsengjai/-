@@ -129,6 +129,9 @@
         <input id="fName" type="text" required placeholder="例如：DAIWA 防風外套"
           class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
 
+        <label class="block text-xs font-medium mb-1 opacity-70">類別</label>
+        <select id="fCategory" class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);"></select>
+
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label class="block text-xs font-medium mb-1 opacity-70">金額（總額）</label>
@@ -227,41 +230,81 @@
     <!-- ============ TAB 2: 每月總覽 ============ -->
     <section id="panelOverview" class="hidden">
 
-      <div class="flex items-center justify-between mb-5 rise-in">
-        <button id="prevMonth" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <div class="text-center">
-          <p id="monthLabel" class="font-display text-xl text-[var(--paper)]">2026年 08月</p>
-          <p class="text-[11px] font-mono mb-1.5" style="color:rgba(244,239,227,0.4);">MONTHLY STATEMENT</p>
-          <input type="month" id="monthPicker"
-            class="text-xs font-mono px-3 py-1 rounded-full text-center"
-            style="background:rgba(244,239,227,0.08); color:var(--paper); border:1px solid rgba(244,239,227,0.22); color-scheme:dark;">
+      <div class="grid grid-cols-2 gap-2 p-1 rounded-xl mb-5" style="background:rgba(244,239,227,0.06);">
+        <button id="viewModeMonthBtn" type="button" class="tab-btn active font-display text-sm py-2 rounded-lg btn-press">月檢視</button>
+        <button id="viewModeYearBtn" type="button" class="tab-btn font-display text-sm py-2 rounded-lg btn-press">年度總覽</button>
+      </div>
+
+      <div id="monthViewContainer">
+        <div class="flex items-center justify-between mb-5 rise-in">
+          <button id="prevMonth" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div class="text-center">
+            <p id="monthLabel" class="font-display text-xl text-[var(--paper)]">2026年 08月</p>
+            <p class="text-[11px] font-mono mb-1.5" style="color:rgba(244,239,227,0.4);">MONTHLY STATEMENT</p>
+            <input type="month" id="monthPicker"
+              class="text-xs font-mono px-3 py-1 rounded-full text-center"
+              style="background:rgba(244,239,227,0.08); color:var(--paper); border:1px solid rgba(244,239,227,0.22); color-scheme:dark;">
+          </div>
+          <button id="nextMonth" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
         </div>
-        <button id="nextMonth" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
+
+        <div class="tag-card stitch-edge p-5 mb-5 rise-in">
+          <div class="tag-hole"></div>
+          <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">TOTAL DUE</p>
+          <p id="monthTotal" class="font-mono font-bold text-3xl">$0</p>
+          <p id="monthCount" class="text-xs opacity-60 mt-1">共 0 筆</p>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 mb-3">
+          <button id="monthSelectModeToggle" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">選取刪除</button>
+          <button id="monthDeleteAllBtn" type="button" class="text-[11px] underline" style="color:var(--rust);">清空全部紀錄</button>
+        </div>
+
+        <div id="monthList" class="space-y-3"></div>
+        <p id="monthEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">這個月份沒有支出紀錄 🧵</p>
+
+        <div id="monthBulkDeleteBar" class="hidden mt-3">
+          <button id="monthDeleteSelectedBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--rust); color:#fff;">
+            刪除已選（<span id="monthSelectedCount">0</span>）
+          </button>
+        </div>
       </div>
 
-      <div class="tag-card stitch-edge p-5 mb-5 rise-in">
-        <div class="tag-hole"></div>
-        <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">TOTAL DUE</p>
-        <p id="monthTotal" class="font-mono font-bold text-3xl">$0</p>
-        <p id="monthCount" class="text-xs opacity-60 mt-1">共 0 筆</p>
-      </div>
+      <div id="yearViewContainer" class="hidden">
+        <div class="flex items-center justify-between mb-5 rise-in">
+          <button id="prevYear" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div class="text-center">
+            <p id="yearLabel" class="font-display text-xl text-[var(--paper)]">2026年</p>
+            <p class="text-[11px] font-mono mb-1.5" style="color:rgba(244,239,227,0.4);">ANNUAL STATEMENT</p>
+          </div>
+          <button id="nextYear" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
 
-      <div class="flex items-center justify-end gap-3 mb-3">
-        <button id="monthSelectModeToggle" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">選取刪除</button>
-        <button id="monthDeleteAllBtn" type="button" class="text-[11px] underline" style="color:var(--rust);">清空全部紀錄</button>
-      </div>
+        <div class="tag-card stitch-edge p-5 mb-5 rise-in">
+          <div class="tag-hole"></div>
+          <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">ANNUAL TOTAL</p>
+          <p id="yearTotal" class="font-mono font-bold text-3xl">$0</p>
+          <p id="yearCount" class="text-xs opacity-60 mt-1">共 0 筆</p>
+        </div>
 
-      <div id="monthList" class="space-y-3"></div>
-      <p id="monthEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">這個月份沒有支出紀錄 🧵</p>
+        <div class="mb-5">
+          <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">月份分佈</p>
+          <div id="yearMonthBars" class="space-y-2"></div>
+        </div>
 
-      <div id="monthBulkDeleteBar" class="hidden mt-3">
-        <button id="monthDeleteSelectedBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--rust); color:#fff;">
-          刪除已選（<span id="monthSelectedCount">0</span>）
-        </button>
+        <div>
+          <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">類別佔比</p>
+          <div id="yearCategoryBars" class="space-y-2"></div>
+          <p id="yearCategoryEmpty" class="text-center text-sm py-6 hidden" style="color:rgba(244,239,227,0.35);">這一年沒有支出紀錄</p>
+        </div>
       </div>
     </section>
 
@@ -329,13 +372,34 @@
   document.getElementById('tabBtnOverview').addEventListener('click', ()=>tabSwitch('overview'));
 
   // ---------- Add form ----------
+  const CATEGORIES = ['外套','長袖Tee','短袖Tee','襯衫','長褲','短褲','鞋子','帽子','襪子','飾品','運費','其他'];
+  // 年度總覽的類別分組：上衣／下裝各自合併，其餘類別維持獨立
+  const CATEGORY_GROUPS = {
+    '長袖Tee': '上衣', '短袖Tee': '上衣', '襯衫': '上衣',
+    '長褲': '下裝', '短褲': '下裝',
+  };
+  function categoryGroupOf(cat){
+    return CATEGORY_GROUPS[cat] || cat || '其他';
+  }
+  function recCategory(r){
+    return r.category || '其他';
+  }
+
   const fName = document.getElementById('fName');
+  const fCategory = document.getElementById('fCategory');
   const fAmount = document.getElementById('fAmount');
   const fDate = document.getElementById('fDate');
   const fInstallments = document.getElementById('fInstallments');
   const fRate = document.getElementById('fRate');
   const previewFirstPeriod = document.getElementById('previewFirstPeriod');
   const previewLaterPeriod = document.getElementById('previewLaterPeriod');
+
+  CATEGORIES.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    fCategory.appendChild(opt);
+  });
 
   // default date = today
   fDate.value = new Date().toISOString().slice(0,10);
@@ -367,6 +431,7 @@
     const record = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       name: fName.value.trim(),
+      category: fCategory.value || '其他',
       amount: parseFloat(fAmount.value) || 0,
       date: fDate.value,
       installments: Math.max(parseInt(fInstallments.value) || 1, 1),
@@ -379,6 +444,7 @@
 
     // reset form
     fName.value = '';
+    fCategory.value = '其他';
     fAmount.value = '';
     fInstallments.value = 1;
     fRate.value = 0;
@@ -443,7 +509,7 @@
       div.style.background = 'rgba(244,239,227,0.06)';
       div.innerHTML = `
         <div class="min-w-0 pr-3 flex-1">
-          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)}</p>
+          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)} <span class="text-[10px] font-mono opacity-40">[${escapeHtml(recCategory(r))}]</span></p>
           <p class="text-[11px] font-mono mt-0.5" style="color:rgba(244,239,227,0.45);">
             ${r.date} ・ ${detail}
           </p>
@@ -587,7 +653,7 @@
             ${monthSelectMode ? `<input type="checkbox" class="selChkM shrink-0 mt-0.5 w-4 h-4" data-id="${r.id}" ${monthSelectedIds.has(r.id) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
               <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}</p>
-              <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date}</p>
+              <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategory(r))}</p>
             </div>
           </div>
           ${monthSelectMode ? '' : `
@@ -639,6 +705,99 @@
         if(rec) openDetail(rec, parseInt(card.dataset.period));
       });
     });
+  }
+
+  // ---------- 月 / 年 檢視切換 ----------
+  const monthViewContainer = document.getElementById('monthViewContainer');
+  const yearViewContainer = document.getElementById('yearViewContainer');
+  const viewModeMonthBtn = document.getElementById('viewModeMonthBtn');
+  const viewModeYearBtn = document.getElementById('viewModeYearBtn');
+
+  viewModeMonthBtn.addEventListener('click', ()=>{
+    viewModeMonthBtn.classList.add('active');
+    viewModeYearBtn.classList.remove('active');
+    monthViewContainer.classList.remove('hidden');
+    yearViewContainer.classList.add('hidden');
+  });
+  viewModeYearBtn.addEventListener('click', ()=>{
+    viewModeYearBtn.classList.add('active');
+    viewModeMonthBtn.classList.remove('active');
+    yearViewContainer.classList.remove('hidden');
+    monthViewContainer.classList.add('hidden');
+    renderYear();
+  });
+
+  // ---------- 年度總覽 ----------
+  let viewYearOnly = today.getFullYear();
+  const MONTH_NAMES = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+  document.getElementById('prevYear').addEventListener('click', ()=>{
+    viewYearOnly--;
+    renderYear();
+  });
+  document.getElementById('nextYear').addEventListener('click', ()=>{
+    viewYearOnly++;
+    renderYear();
+  });
+
+  function renderYear(){
+    document.getElementById('yearLabel').textContent = `${viewYearOnly}年`;
+
+    const monthlyTotals = Array(12).fill(0);
+    const categoryTotals = {};
+    let itemCount = 0;
+
+    records.forEach(r => {
+      for(let p = 1; p <= r.installments; p++){
+        const d = shiftMonths(r.date, p - 1);
+        if(d.getFullYear() === viewYearOnly){
+          const amt = perPeriodAmount(r, p);
+          monthlyTotals[d.getMonth()] += amt;
+          const group = categoryGroupOf(recCategory(r));
+          categoryTotals[group] = (categoryTotals[group] || 0) + amt;
+          itemCount++;
+        }
+      }
+    });
+
+    const yearTotal = monthlyTotals.reduce((s, a) => s + a, 0);
+    document.getElementById('yearTotal').textContent = fmtMoney(yearTotal);
+    document.getElementById('yearCount').textContent = `共 ${itemCount} 筆`;
+
+    // 月份分佈
+    const maxMonth = Math.max(...monthlyTotals, 1);
+    const monthBarsWrap = document.getElementById('yearMonthBars');
+    monthBarsWrap.innerHTML = monthlyTotals.map((amt, i) => `
+      <div>
+        <div class="flex justify-between text-xs mb-1">
+          <span class="opacity-60">${MONTH_NAMES[i]}</span>
+          <span class="font-mono">${fmtMoney(amt)}</span>
+        </div>
+        <div class="progress-track h-2">
+          <div class="progress-fill h-full" style="width:${amt > 0 ? Math.max((amt/maxMonth)*100, 3) : 0}%;"></div>
+        </div>
+      </div>
+    `).join('');
+
+    // 類別佔比
+    const catWrap = document.getElementById('yearCategoryBars');
+    const catEmpty = document.getElementById('yearCategoryEmpty');
+    const catEntries = Object.entries(categoryTotals).sort((a,b) => b[1] - a[1]);
+    catEmpty.classList.toggle('hidden', catEntries.length > 0);
+    catWrap.innerHTML = catEntries.map(([cat, amt]) => {
+      const pct = yearTotal > 0 ? Math.round((amt / yearTotal) * 100) : 0;
+      return `
+      <div>
+        <div class="flex justify-between text-xs mb-1">
+          <span class="opacity-70">${escapeHtml(cat)}</span>
+          <span class="font-mono">${fmtMoney(amt)} ・ ${pct}%</span>
+        </div>
+        <div class="progress-track h-2">
+          <div class="h-full" style="width:${pct}%; background:var(--thread);"></div>
+        </div>
+      </div>
+    `;
+    }).join('');
   }
 
   // ---------- Detail modal ----------
@@ -701,6 +860,7 @@
       <p class="text-lg font-semibold mb-4 pr-6">${escapeHtml(r.name)}</p>
 
       <div class="space-y-2.5 text-sm">
+        <div class="flex justify-between"><span class="opacity-60">類別</span><span class="font-mono">${escapeHtml(recCategory(r))}</span></div>
         <div class="flex justify-between"><span class="opacity-60">購買日期</span><span class="font-mono">${r.date}</span></div>
         <div class="flex justify-between"><span class="opacity-60">分期方式</span><span class="font-mono">${isOneTime ? '一次付清' : `${r.installments} 期`}</span></div>
         ${!isOneTime ? `<div class="flex justify-between"><span class="opacity-60">目前進度</span><span class="font-mono">第 ${currentPeriod}/${r.installments} 期</span></div>` : ''}
@@ -745,6 +905,12 @@
           <div>
             <label class="block text-xs opacity-60 mb-1">品項名稱</label>
             <input id="editName" type="text" value="${escapeHtml(r.name)}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+          <div>
+            <label class="block text-xs opacity-60 mb-1">類別</label>
+            <select id="editCategory" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+              ${CATEGORIES.map(cat => `<option value="${cat}" ${recCategory(r) === cat ? 'selected' : ''}>${cat}</option>`).join('')}
+            </select>
           </div>
           <div>
             <label class="block text-xs opacity-60 mb-1">購買日期</label>
@@ -816,6 +982,7 @@
       document.getElementById('editCancelBtn').addEventListener('click', ()=> openDetail(r, currentPeriod));
       document.getElementById('editSaveBtn').addEventListener('click', ()=>{
         const name = document.getElementById('editName').value.trim();
+        const category = document.getElementById('editCategory').value;
         const date = document.getElementById('editDate').value;
         if(!name || !date){ alert('品項名稱與購買日期不能空白'); return; }
 
@@ -825,7 +992,7 @@
         if(editMode === 'custom'){
           records[idx] = {
             ...records[idx],
-            name, date,
+            name, category, date,
             installments: editInstallments,
             amount: editCustomAmounts.reduce((s,a) => s + a, 0),
             rate: 0,
@@ -835,7 +1002,7 @@
           const inst = Math.max(parseInt(document.getElementById('editInstallments').value) || 1, 1);
           const amt = parseFloat(document.getElementById('editAmount').value) || 0;
           const rate = parseFloat(document.getElementById('editRate').value) || 0;
-          const updated = { ...records[idx], name, date, installments: inst, amount: amt, rate };
+          const updated = { ...records[idx], name, category, date, installments: inst, amount: amt, rate };
           delete updated.customAmounts;
           records[idx] = updated;
         }
@@ -1023,7 +1190,7 @@
     directRecords.forEach(r => {
       const rec = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-        name: r.name, amount: r.amount, date: r.date, installments: r.installments, rate: r.rate
+        name: r.name, category: '其他', amount: r.amount, date: r.date, installments: r.installments, rate: r.rate
       };
       if(r.customAmounts) rec.customAmounts = r.customAmounts;
       records.push(rec);
