@@ -241,8 +241,18 @@
           <button id="allRecordsDeleteAllBtn" type="button" class="hidden text-[11px] underline" style="color:var(--rust);">清空全部</button>
         </div>
         <p class="text-[11px] mt-1 px-1 opacity-40">點單筆右側垃圾桶圖示可刪除該筆輸入紀錄</p>
+
+        <div class="flex gap-2 mt-2">
+          <input id="allRecordsSearch" type="text" placeholder="搜尋品項名稱…"
+            class="flex-1 px-3 py-2 rounded-lg text-sm" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
+          <select id="allRecordsCategoryFilter" class="px-2 py-2 rounded-lg text-xs" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
+            <option value="">全部類別</option>
+          </select>
+        </div>
+
         <div id="allRecordsList" class="hidden space-y-2 mt-2 max-h-80 overflow-y-auto pr-0.5"></div>
         <p id="allRecordsEmpty" class="text-center text-sm py-6" style="color:rgba(244,239,227,0.35);">尚未新增任何紀錄</p>
+        <p id="allRecordsNoMatch" class="hidden text-center text-sm py-6" style="color:rgba(244,239,227,0.35);">沒有符合搜尋/篩選條件的紀錄</p>
       </div>
     </section>
 
@@ -255,6 +265,13 @@
       </div>
 
       <div id="monthViewContainer">
+        <div class="tag-card stitch-edge p-4 mb-4 rise-in" style="background:#EFE6D0;">
+          <div class="tag-hole"></div>
+          <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">REMAINING BALANCE</p>
+          <p id="remainingBalance" class="font-mono font-bold text-2xl">$0</p>
+          <p class="text-[11px] opacity-60 mt-0.5">目前所有未標記已繳的分期加總</p>
+        </div>
+
         <div class="flex items-center justify-between mb-5 rise-in">
           <button id="prevMonth" class="btn-press w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(244,239,227,0.08);">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
@@ -276,6 +293,10 @@
           <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">TOTAL DUE</p>
           <p id="monthTotal" class="font-mono font-bold text-3xl">$0</p>
           <p id="monthCount" class="text-xs opacity-60 mt-1">共 0 筆</p>
+          <div class="flex gap-4 mt-2 text-xs">
+            <span><span style="color:var(--sage);">●</span> 已繳 <span id="monthPaidAmt" class="font-mono">$0</span></span>
+            <span><span style="color:var(--rust);">●</span> 未繳 <span id="monthUnpaidAmt" class="font-mono">$0</span></span>
+          </div>
         </div>
 
         <div class="flex items-center justify-end gap-3 mb-3">
@@ -312,6 +333,7 @@
           <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">ANNUAL TOTAL</p>
           <p id="yearTotal" class="font-mono font-bold text-3xl">$0</p>
           <p id="yearCount" class="text-xs opacity-60 mt-1">共 0 筆</p>
+          <p id="yearCompare" class="hidden text-xs mt-2 pt-2" style="border-top:1px solid rgba(15,27,45,0.1);"></p>
         </div>
 
         <div class="mb-5">
@@ -459,6 +481,37 @@
     return r.firstPaymentDate || r.date;
   }
 
+  // ---------- 付款狀態（已繳／未繳） ----------
+  function isPeriodPaid(r, period){
+    return Array.isArray(r.paidPeriods) && r.paidPeriods.includes(period);
+  }
+  function togglePeriodPaid(recordId, period){
+    const r = records.find(rec => rec.id === recordId);
+    if(!r) return;
+    if(!Array.isArray(r.paidPeriods)) r.paidPeriods = [];
+    const idx = r.paidPeriods.indexOf(period);
+    if(idx === -1) r.paidPeriods.push(period);
+    else r.paidPeriods.splice(idx, 1);
+    saveRecords(records);
+  }
+  // 是否逾期：該期所屬月份已經過了（早於目前真實年月）且尚未標記已繳
+  function isPeriodOverdue(r, period){
+    if(isPeriodPaid(r, period)) return false;
+    const d = shiftMonths(periodBaseDate(r), period - 1);
+    const nowKey = ymKey(today.getFullYear(), today.getMonth());
+    return ymKey(d.getFullYear(), d.getMonth()) < nowKey;
+  }
+  // 全部紀錄中，尚未標記已繳的期數金額加總（不論過去、現在或未來）
+  function computeRemainingBalance(){
+    let total = 0;
+    records.forEach(r => {
+      for(let p = 1; p <= r.installments; p++){
+        if(!isPeriodPaid(r, p)) total += perPeriodAmount(r, p);
+      }
+    });
+    return total;
+  }
+
   const fName = document.getElementById('fName');
   const fCategory = document.getElementById('fCategory');
   const fAmount = document.getElementById('fAmount');
@@ -545,6 +598,18 @@
   const allRecordsToggle = document.getElementById('allRecordsToggle');
   const allRecordsChevron = document.getElementById('allRecordsChevron');
   const allRecordsDeleteAllBtn = document.getElementById('allRecordsDeleteAllBtn');
+  const allRecordsSearch = document.getElementById('allRecordsSearch');
+  const allRecordsCategoryFilter = document.getElementById('allRecordsCategoryFilter');
+
+  CATEGORIES.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    allRecordsCategoryFilter.appendChild(opt);
+  });
+
+  allRecordsSearch.addEventListener('input', renderAllRecords);
+  allRecordsCategoryFilter.addEventListener('change', renderAllRecords);
 
   allRecordsToggle.addEventListener('click', ()=>{
     const isHidden = allRecordsList.classList.toggle('hidden');
@@ -564,13 +629,24 @@
   function renderAllRecords(){
     const wrap = allRecordsList;
     const empty = document.getElementById('allRecordsEmpty');
+    const noMatch = document.getElementById('allRecordsNoMatch');
     wrap.innerHTML = '';
 
-    const sorted = [...records].sort((a,b) => b.date.localeCompare(a.date));
-    document.getElementById('allRecordsCount').textContent = sorted.length > 0 ? `（${sorted.length} 筆）` : '';
-    empty.classList.toggle('hidden', sorted.length > 0);
-    allRecordsToggle.classList.toggle('hidden', sorted.length === 0);
-    allRecordsDeleteAllBtn.classList.toggle('hidden', sorted.length === 0);
+    const query = allRecordsSearch.value.trim().toLowerCase();
+    const catFilter = allRecordsCategoryFilter.value;
+
+    const allSorted = [...records].sort((a,b) => b.date.localeCompare(a.date));
+    const sorted = allSorted.filter(r => {
+      if(query && !r.name.toLowerCase().includes(query)) return false;
+      if(catFilter && recCategory(r) !== catFilter) return false;
+      return true;
+    });
+
+    document.getElementById('allRecordsCount').textContent = allSorted.length > 0 ? `（${allSorted.length} 筆）` : '';
+    empty.classList.toggle('hidden', allSorted.length > 0);
+    noMatch.classList.toggle('hidden', !(allSorted.length > 0 && sorted.length === 0));
+    allRecordsToggle.classList.toggle('hidden', allSorted.length === 0);
+    allRecordsDeleteAllBtn.classList.toggle('hidden', allSorted.length === 0);
 
     sorted.forEach(r => {
       const first = perPeriodAmount(r, 1);
@@ -688,6 +764,7 @@
   function renderMonth(){
     document.getElementById('monthLabel').textContent = `${viewYear}年 ${String(viewMonth+1).padStart(2,'0')}月`;
     document.getElementById('monthPicker').value = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+    document.getElementById('remainingBalance').textContent = fmtMoney(computeRemainingBalance());
 
     const items = [];
     records.forEach(r => {
@@ -707,8 +784,11 @@
     items.sort((a,b) => b.amount - a.amount);
 
     const total = items.reduce((s,i) => s + i.amount, 0);
+    const paidAmt = items.reduce((s,i) => s + (isPeriodPaid(i.record, i.period) ? i.amount : 0), 0);
     document.getElementById('monthTotal').textContent = fmtMoney(total);
     document.getElementById('monthCount').textContent = `共 ${items.length} 筆`;
+    document.getElementById('monthPaidAmt').textContent = fmtMoney(paidAmt);
+    document.getElementById('monthUnpaidAmt').textContent = fmtMoney(total - paidAmt);
 
     const list = document.getElementById('monthList');
     const empty = document.getElementById('monthEmpty');
@@ -719,9 +799,12 @@
       const r = it.record;
       const isOneTime = r.installments === 1;
       const pct = Math.round((it.period / r.installments) * 100);
+      const paid = isPeriodPaid(r, it.period);
+      const overdue = isPeriodOverdue(r, it.period);
 
       const card = document.createElement('div');
       card.className = 'tag-card stitch-edge p-4 rise-in cursor-pointer';
+      if(paid) card.style.opacity = '0.6';
       card.dataset.id = r.id;
       card.dataset.period = it.period;
       card.innerHTML = `
@@ -741,15 +824,24 @@
 
         <div class="flex items-end justify-between mt-3">
           <span class="font-mono font-bold text-lg">${fmtMoney(it.amount)}</span>
-          <span class="text-xs font-display px-2 py-0.5 rounded" style="background:${isOneTime ? 'rgba(107,138,92,0.18); color:var(--sage)' : 'rgba(201,162,39,0.18); color:#8a6d10'};">
-            ${isOneTime ? '一次付清' : `第 ${it.period}/${r.installments} 期`}
-          </span>
+          <div class="flex items-center gap-1.5">
+            ${overdue ? `<span class="text-xs font-display px-2 py-0.5 rounded" style="background:rgba(180,83,42,0.25); color:var(--rust);">逾期</span>` : ''}
+            <span class="text-xs font-display px-2 py-0.5 rounded" style="background:${isOneTime ? 'rgba(107,138,92,0.18); color:var(--sage)' : 'rgba(201,162,39,0.18); color:#8a6d10'};">
+              ${isOneTime ? '一次付清' : `第 ${it.period}/${r.installments} 期`}
+            </span>
+          </div>
         </div>
 
         ${isOneTime ? '' : `
         <div class="progress-track h-1.5 mt-3">
           <div class="progress-fill h-full" style="width:${pct}%;"></div>
         </div>`}
+
+        ${monthSelectMode ? '' : `
+        <button data-id="${r.id}" data-period="${it.period}" class="payToggleBtn btn-press w-full py-2 mt-3 rounded-lg text-xs font-display tracking-wide"
+          style="background:${paid ? 'rgba(107,138,92,0.22); color:var(--sage)' : 'rgba(244,239,227,0.08); color:rgba(244,239,227,0.6)'};">
+          ${paid ? '✓ 已繳' : '標記為已繳'}
+        </button>`}
       `;
       list.appendChild(card);
     });
@@ -758,6 +850,13 @@
       btn.addEventListener('click', (e)=>{
         e.stopPropagation();
         deleteRecord(btn.dataset.id);
+      });
+    });
+    list.querySelectorAll('.payToggleBtn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        togglePeriodPaid(btn.dataset.id, parseInt(btn.dataset.period));
+        renderMonth();
       });
     });
     list.querySelectorAll('.selChkM').forEach(chk=>{
@@ -817,9 +916,7 @@
     renderYear();
   });
 
-  function renderYear(){
-    document.getElementById('yearLabel').textContent = `${viewYearOnly}年`;
-
+  function computeYearData(year){
     const monthlyTotals = Array(12).fill(0);
     const categoryTotals = {};
     let itemCount = 0;
@@ -827,7 +924,7 @@
     records.forEach(r => {
       for(let p = 1; p <= r.installments; p++){
         const d = shiftMonths(periodBaseDate(r), p - 1);
-        if(d.getFullYear() === viewYearOnly){
+        if(d.getFullYear() === year){
           const amt = perPeriodAmount(r, p);
           monthlyTotals[d.getMonth()] += amt;
           const group = categoryGroupOf(recCategory(r));
@@ -838,23 +935,51 @@
     });
 
     const yearTotal = monthlyTotals.reduce((s, a) => s + a, 0);
+    return { monthlyTotals, categoryTotals, yearTotal, itemCount };
+  }
+
+  function renderYear(){
+    document.getElementById('yearLabel').textContent = `${viewYearOnly}年`;
+
+    const { monthlyTotals, categoryTotals, yearTotal, itemCount } = computeYearData(viewYearOnly);
+    const prevYearData = computeYearData(viewYearOnly - 1);
+
     document.getElementById('yearTotal').textContent = fmtMoney(yearTotal);
     document.getElementById('yearCount').textContent = `共 ${itemCount} 筆`;
 
-    // 月份分佈
-    const maxMonth = Math.max(...monthlyTotals, 1);
+    // 與去年同期比較
+    const compareEl = document.getElementById('yearCompare');
+    if(prevYearData.yearTotal > 0){
+      const diff = yearTotal - prevYearData.yearTotal;
+      const pct = Math.round((diff / prevYearData.yearTotal) * 100);
+      const up = diff > 0;
+      compareEl.classList.remove('hidden');
+      compareEl.innerHTML = `
+        去年（${viewYearOnly-1}）同期 <span class="font-mono">${fmtMoney(prevYearData.yearTotal)}</span> ・
+        <span style="color:${up ? 'var(--rust)' : 'var(--sage)'};">${up ? '▲' : '▼'} ${diff > 0 ? '+' : ''}${fmtMoney(diff)}（${pct > 0 ? '+' : ''}${pct}%）</span>
+      `;
+    }else{
+      compareEl.classList.add('hidden');
+      compareEl.innerHTML = '';
+    }
+
+    // 月份分佈（含去年同月比較）
+    const maxMonth = Math.max(...monthlyTotals, ...prevYearData.monthlyTotals, 1);
     const monthBarsWrap = document.getElementById('yearMonthBars');
-    monthBarsWrap.innerHTML = monthlyTotals.map((amt, i) => `
+    monthBarsWrap.innerHTML = monthlyTotals.map((amt, i) => {
+      const prevAmt = prevYearData.monthlyTotals[i];
+      return `
       <div>
         <div class="flex justify-between text-xs mb-1">
           <span style="color:rgba(244,239,227,0.65);">${MONTH_NAMES[i]}</span>
-          <span class="font-mono" style="color:var(--paper);">${fmtMoney(amt)}</span>
+          <span class="font-mono" style="color:var(--paper);">${fmtMoney(amt)}${prevAmt > 0 ? ` <span style="color:rgba(244,239,227,0.4);">（去年 ${fmtMoney(prevAmt)}）</span>` : ''}</span>
         </div>
         <div class="progress-track h-2">
           <div class="progress-fill h-full" style="width:${amt > 0 ? Math.max((amt/maxMonth)*100, 3) : 0}%;"></div>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
 
     // 類別佔比
     const catWrap = document.getElementById('yearCategoryBars');
@@ -1000,7 +1125,7 @@
         <div class="space-y-1 max-h-40 overflow-y-auto pr-0.5">
           ${r.customAmounts.map((amt,i) => `
             <div class="flex justify-between text-sm px-2 py-1 rounded ${i+1===currentPeriod ? 'font-semibold' : ''}" style="${i+1===currentPeriod ? 'background:rgba(201,162,39,0.15);' : ''}">
-              <span class="opacity-70">第 ${i+1}/${r.installments} 期</span>
+              <span class="opacity-70">${isPeriodPaid(r, i+1) ? '✓ ' : ''}第 ${i+1}/${r.installments} 期</span>
               <span class="font-mono">${fmtMoney(amt)}</span>
             </div>
           `).join('')}
@@ -1022,7 +1147,7 @@
         <div class="flex justify-between"><span class="opacity-60">購買日期</span><span class="font-mono">${r.date}</span></div>
         ${!isOneTime && r.firstPaymentDate && r.firstPaymentDate !== r.date ? `<div class="flex justify-between"><span class="opacity-60">首期付款日期</span><span class="font-mono">${r.firstPaymentDate}</span></div>` : ''}
         <div class="flex justify-between"><span class="opacity-60">分期方式</span><span class="font-mono">${isOneTime ? '一次付清' : `${r.installments} 期`}</span></div>
-        ${!isOneTime ? `<div class="flex justify-between"><span class="opacity-60">目前進度</span><span class="font-mono">第 ${currentPeriod}/${r.installments} 期</span></div>` : ''}
+        ${!isOneTime ? `<div class="flex justify-between"><span class="opacity-60">目前進度</span><span class="font-mono">第 ${currentPeriod}/${r.installments} 期 ${isPeriodPaid(r, currentPeriod) ? '（已繳）' : isPeriodOverdue(r, currentPeriod) ? '（逾期未繳）' : '（未繳）'}</span></div>` : ''}
         <div class="flex justify-between"><span class="opacity-60">該筆利率</span><span class="font-mono">${r.customAmounts ? '（依實際金額，不適用）' : `${displayRate}%${canInfer ? ' (推斷)' : ''}`}</span></div>
       </div>
 
@@ -1037,7 +1162,13 @@
 
       ${canInfer ? `<p class="text-[11px] mt-3 opacity-50">＊此筆利率未記錄，依 ${r.installments} 期的常見利率（${displayRate}%）推算，僅供參考，不影響實際每期應繳金額</p>` : ''}
 
-      <div class="flex gap-2 mt-5">
+      ${!isOneTime ? `
+      <button id="detailPayToggleBtn" class="btn-press w-full py-2.5 mt-4 rounded-lg text-sm font-display tracking-wide"
+        style="background:${isPeriodPaid(r, currentPeriod) ? 'rgba(107,138,92,0.22); color:var(--sage)' : 'rgba(244,239,227,0.08); color:rgba(244,239,227,0.6)'};">
+        ${isPeriodPaid(r, currentPeriod) ? `✓ 第 ${currentPeriod} 期已繳（點擊取消）` : `標記第 ${currentPeriod} 期為已繳`}
+      </button>` : ''}
+
+      <div class="flex gap-2 mt-3">
         <button id="detailEditBtn" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--thread); color:var(--ink);">✏️ 編輯</button>
         <button id="detailCloseBtn" class="btn-press px-5 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--ink); color:var(--paper);">關閉</button>
       </div>
@@ -1045,6 +1176,13 @@
     detailModal.classList.remove('hidden');
     document.getElementById('detailCloseBtn').addEventListener('click', closeDetail);
     document.getElementById('detailEditBtn').addEventListener('click', ()=> openEdit(r, currentPeriod));
+    if(!isOneTime){
+      document.getElementById('detailPayToggleBtn').addEventListener('click', ()=>{
+        togglePeriodPaid(r.id, currentPeriod);
+        renderMonth();
+        openDetail(r, currentPeriod);
+      });
+    }
   }
 
   // ---------- Edit form (in modal) ----------
