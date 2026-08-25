@@ -299,7 +299,8 @@
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-3 mb-3">
+        <div class="flex items-center justify-end gap-3 mb-3 flex-wrap">
+          <button id="monthPayModeToggle" type="button" class="text-[11px] underline" style="color:var(--sage);">批次標記已繳</button>
           <button id="monthSelectModeToggle" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">選取刪除</button>
           <button id="monthDeleteAllBtn" type="button" class="text-[11px] underline" style="color:var(--rust);">清空全部紀錄</button>
         </div>
@@ -310,6 +311,15 @@
         <div id="monthBulkDeleteBar" class="hidden mt-3">
           <button id="monthDeleteSelectedBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--rust); color:#fff;">
             刪除已選（<span id="monthSelectedCount">0</span>）
+          </button>
+        </div>
+
+        <div id="monthBulkPayBar" class="hidden mt-3 flex gap-2">
+          <button id="monthMarkPaidBtn" type="button" class="btn-press flex-1 py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--sage); color:var(--ink);">
+            標記已選為已繳（<span id="monthPaySelectedCount">0</span>）
+          </button>
+          <button id="monthMarkUnpaidBtn" type="button" class="btn-press px-4 py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:rgba(244,239,227,0.1); color:var(--paper);">
+            設為未繳
           </button>
         </div>
       </div>
@@ -493,6 +503,15 @@
     if(idx === -1) r.paidPeriods.push(period);
     else r.paidPeriods.splice(idx, 1);
     saveRecords(records);
+  }
+  // 明確設定某期為已繳／未繳（供批次操作使用，呼叫端自行統一 saveRecords）
+  function setPeriodPaid(recordId, period, paid){
+    const r = records.find(rec => rec.id === recordId);
+    if(!r) return;
+    if(!Array.isArray(r.paidPeriods)) r.paidPeriods = [];
+    const idx = r.paidPeriods.indexOf(period);
+    if(paid && idx === -1) r.paidPeriods.push(period);
+    if(!paid && idx !== -1) r.paidPeriods.splice(idx, 1);
   }
   // 是否逾期：該期所屬月份已經過了（早於目前真實年月）且尚未標記已繳
   function isPeriodOverdue(r, period){
@@ -687,8 +706,9 @@
   const today = new Date();
   let viewYear = today.getFullYear();
   let viewMonth = today.getMonth(); // 0-11
-  let monthSelectMode = false;
-  let monthSelectedIds = new Set();
+  let monthSelectMode = null; // null | 'delete' | 'pay'
+  let monthSelectedIds = new Set();       // 刪除模式：記錄 id
+  let monthPaySelectedKeys = new Set();   // 標記已繳模式：`${id}_${period}` 複合鍵
 
   document.getElementById('prevMonth').addEventListener('click', ()=>{
     viewMonth--; if(viewMonth < 0){ viewMonth = 11; viewYear--; }
@@ -714,17 +734,55 @@
   });
 
   const monthSelectModeToggle = document.getElementById('monthSelectModeToggle');
+  const monthPayModeToggle = document.getElementById('monthPayModeToggle');
   const monthDeleteAllBtn = document.getElementById('monthDeleteAllBtn');
   const monthBulkDeleteBar = document.getElementById('monthBulkDeleteBar');
   const monthDeleteSelectedBtn = document.getElementById('monthDeleteSelectedBtn');
   const monthSelectedCountEl = document.getElementById('monthSelectedCount');
+  const monthBulkPayBar = document.getElementById('monthBulkPayBar');
+  const monthMarkPaidBtn = document.getElementById('monthMarkPaidBtn');
+  const monthMarkUnpaidBtn = document.getElementById('monthMarkUnpaidBtn');
+  const monthPaySelectedCountEl = document.getElementById('monthPaySelectedCount');
+
+  function exitMonthSelectModes(){
+    monthSelectMode = null;
+    monthSelectedIds.clear();
+    monthPaySelectedKeys.clear();
+    monthSelectModeToggle.textContent = '選取刪除';
+    monthPayModeToggle.textContent = '批次標記已繳';
+    monthBulkDeleteBar.classList.add('hidden');
+    monthBulkPayBar.classList.add('hidden');
+  }
 
   monthSelectModeToggle.addEventListener('click', ()=>{
-    monthSelectMode = !monthSelectMode;
-    monthSelectedIds.clear();
-    monthSelectModeToggle.textContent = monthSelectMode ? '取消選取' : '選取刪除';
-    monthBulkDeleteBar.classList.toggle('hidden', !monthSelectMode);
-    updateMonthSelectedCount();
+    if(monthSelectMode === 'delete'){
+      exitMonthSelectModes();
+    }else{
+      monthSelectMode = 'delete';
+      monthPaySelectedKeys.clear();
+      monthSelectedIds.clear();
+      monthSelectModeToggle.textContent = '取消選取';
+      monthPayModeToggle.textContent = '批次標記已繳';
+      monthBulkDeleteBar.classList.remove('hidden');
+      monthBulkPayBar.classList.add('hidden');
+      updateMonthSelectedCount();
+    }
+    renderMonth();
+  });
+
+  monthPayModeToggle.addEventListener('click', ()=>{
+    if(monthSelectMode === 'pay'){
+      exitMonthSelectModes();
+    }else{
+      monthSelectMode = 'pay';
+      monthSelectedIds.clear();
+      monthPaySelectedKeys.clear();
+      monthPayModeToggle.textContent = '取消選取';
+      monthSelectModeToggle.textContent = '選取刪除';
+      monthBulkPayBar.classList.remove('hidden');
+      monthBulkDeleteBar.classList.add('hidden');
+      updateMonthPaySelectedCount();
+    }
     renderMonth();
   });
 
@@ -734,10 +792,7 @@
     if(!confirm('再次確認：這會清空所有資料，真的要繼續嗎？')) return;
     records = [];
     saveRecords(records);
-    monthSelectMode = false;
-    monthSelectedIds.clear();
-    monthSelectModeToggle.textContent = '選取刪除';
-    monthBulkDeleteBar.classList.add('hidden');
+    exitMonthSelectModes();
     renderAllRecords();
     renderMonth();
   });
@@ -747,11 +802,34 @@
     if(!confirm(`確定要刪除已選取的 ${monthSelectedIds.size} 筆紀錄嗎？此動作無法復原。`)) return;
     records = records.filter(r => !monthSelectedIds.has(r.id));
     saveRecords(records);
-    monthSelectMode = false;
-    monthSelectedIds.clear();
-    monthSelectModeToggle.textContent = '選取刪除';
-    monthBulkDeleteBar.classList.add('hidden');
+    exitMonthSelectModes();
     renderAllRecords();
+    renderMonth();
+  });
+
+  monthMarkPaidBtn.addEventListener('click', ()=>{
+    if(monthPaySelectedKeys.size === 0) return;
+    monthPaySelectedKeys.forEach(key => {
+      const idx = key.lastIndexOf('_');
+      const id = key.slice(0, idx);
+      const period = parseInt(key.slice(idx+1));
+      setPeriodPaid(id, period, true);
+    });
+    saveRecords(records);
+    exitMonthSelectModes();
+    renderMonth();
+  });
+
+  monthMarkUnpaidBtn.addEventListener('click', ()=>{
+    if(monthPaySelectedKeys.size === 0) return;
+    monthPaySelectedKeys.forEach(key => {
+      const idx = key.lastIndexOf('_');
+      const id = key.slice(0, idx);
+      const period = parseInt(key.slice(idx+1));
+      setPeriodPaid(id, period, false);
+    });
+    saveRecords(records);
+    exitMonthSelectModes();
     renderMonth();
   });
 
@@ -759,6 +837,14 @@
     monthSelectedCountEl.textContent = monthSelectedIds.size;
     monthDeleteSelectedBtn.disabled = monthSelectedIds.size === 0;
     monthDeleteSelectedBtn.style.opacity = monthSelectedIds.size === 0 ? '0.5' : '1';
+  }
+
+  function updateMonthPaySelectedCount(){
+    monthPaySelectedCountEl.textContent = monthPaySelectedKeys.size;
+    monthMarkPaidBtn.disabled = monthPaySelectedKeys.size === 0;
+    monthMarkPaidBtn.style.opacity = monthPaySelectedKeys.size === 0 ? '0.5' : '1';
+    monthMarkUnpaidBtn.disabled = monthPaySelectedKeys.size === 0;
+    monthMarkUnpaidBtn.style.opacity = monthPaySelectedKeys.size === 0 ? '0.5' : '1';
   }
 
   function renderMonth(){
@@ -801,22 +887,26 @@
       const pct = Math.round((it.period / r.installments) * 100);
       const paid = isPeriodPaid(r, it.period);
       const overdue = isPeriodOverdue(r, it.period);
+      const payKey = `${r.id}_${it.period}`;
+      const inSelectMode = monthSelectMode === 'delete' || monthSelectMode === 'pay';
 
       const card = document.createElement('div');
       card.className = 'tag-card stitch-edge p-4 rise-in cursor-pointer';
       if(paid) card.style.opacity = '0.6';
       card.dataset.id = r.id;
       card.dataset.period = it.period;
+      card.dataset.payKey = payKey;
       card.innerHTML = `
         <div class="flex items-start justify-between gap-3">
           <div class="flex items-start gap-2.5 min-w-0">
-            ${monthSelectMode ? `<input type="checkbox" class="selChkM shrink-0 mt-0.5 w-4 h-4" data-id="${r.id}" ${monthSelectedIds.has(r.id) ? 'checked' : ''}>` : ''}
+            ${monthSelectMode === 'delete' ? `<input type="checkbox" class="selChkM shrink-0 mt-0.5 w-4 h-4" data-id="${r.id}" ${monthSelectedIds.has(r.id) ? 'checked' : ''}>` : ''}
+            ${monthSelectMode === 'pay' ? `<input type="checkbox" class="selChkPay shrink-0 mt-0.5 w-4 h-4" data-key="${payKey}" ${monthPaySelectedKeys.has(payKey) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
               <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}</p>
               <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategory(r))}</p>
             </div>
           </div>
-          ${monthSelectMode ? '' : `
+          ${inSelectMode ? '' : `
           <button data-id="${r.id}" class="delBtnM btn-press shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style="background:rgba(180,83,42,0.14);">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--rust)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>`}
@@ -837,7 +927,7 @@
           <div class="progress-fill h-full" style="width:${pct}%;"></div>
         </div>`}
 
-        ${monthSelectMode ? '' : `
+        ${inSelectMode ? '' : `
         <button data-id="${r.id}" data-period="${it.period}" class="payToggleBtn btn-press w-full py-2 mt-3 rounded-lg text-xs font-display tracking-wide"
           style="background:${paid ? 'rgba(107,138,92,0.22); color:var(--sage)' : 'rgba(15,27,45,0.08); color:rgba(15,27,45,0.65)'};">
           ${paid ? '✓ 已繳' : '標記為已繳'}
@@ -867,10 +957,26 @@
         updateMonthSelectedCount();
       });
     });
+    list.querySelectorAll('.selChkPay').forEach(chk=>{
+      chk.addEventListener('click', (e)=> e.stopPropagation());
+      chk.addEventListener('change', ()=>{
+        if(chk.checked) monthPaySelectedKeys.add(chk.dataset.key);
+        else monthPaySelectedKeys.delete(chk.dataset.key);
+        updateMonthPaySelectedCount();
+      });
+    });
     list.querySelectorAll('.tag-card').forEach(card=>{
       card.addEventListener('click', ()=>{
-        if(monthSelectMode){
+        if(monthSelectMode === 'delete'){
           const chk = card.querySelector('.selChkM');
+          if(chk){
+            chk.checked = !chk.checked;
+            chk.dispatchEvent(new Event('change'));
+          }
+          return;
+        }
+        if(monthSelectMode === 'pay'){
+          const chk = card.querySelector('.selChkPay');
           if(chk){
             chk.checked = !chk.checked;
             chk.dispatchEvent(new Event('change'));
