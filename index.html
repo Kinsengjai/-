@@ -121,6 +121,12 @@
     </div>
   </header>
 
+  <!-- 定期備份提醒 -->
+  <div id="backupReminder" class="hidden mx-5 mt-3 px-4 py-3 rounded-lg flex items-center justify-between gap-3" style="background:rgba(201,162,39,0.15); border:1px solid rgba(201,162,39,0.3);">
+    <p class="text-xs flex-1" style="color:var(--paper);">📦 <span id="backupReminderText"></span></p>
+    <button id="backupReminderBtn" type="button" class="btn-press text-xs font-display px-3 py-1.5 rounded-lg shrink-0" style="background:var(--thread); color:var(--ink);">備份</button>
+  </div>
+
   <!-- Tabs -->
   <nav class="px-5 pt-4">
     <div class="grid grid-cols-3 gap-2 p-1 rounded-xl" style="background:rgba(244,239,227,0.06);">
@@ -177,6 +183,10 @@
         <input id="fFirstPaymentDate" type="date"
           class="w-full mb-1 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
         <p class="text-[11px] mb-4 opacity-50">分期第一期實際扣款的日期，留空則預設與購買日期相同</p>
+
+        <label class="block text-xs font-medium mb-1 opacity-70">備註（選填）</label>
+        <input id="fNote" type="text" placeholder="例如：尺寸M、藍色、購自 UNIQLO 官網"
+          class="w-full mb-4 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
 
         <div class="stitch-line mb-4"></div>
 
@@ -344,6 +354,15 @@
           <p id="yearTotal" class="font-mono font-bold text-3xl">$0</p>
           <p id="yearCount" class="text-xs opacity-60 mt-1">共 0 筆</p>
           <p id="yearCompare" class="hidden text-xs mt-2 pt-2" style="border-top:1px solid rgba(15,27,45,0.1);"></p>
+        </div>
+
+        <div class="mb-5">
+          <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">消費趨勢</p>
+          <div id="yearTrendChart" class="rounded-lg p-3" style="background:rgba(244,239,227,0.04);"></div>
+          <div id="yearTrendLegend" class="hidden flex items-center gap-4 mt-2 px-1 text-[11px]" style="color:rgba(244,239,227,0.5);">
+            <span class="flex items-center gap-1.5"><span style="display:inline-block;width:12px;height:2px;background:var(--thread);"></span>今年</span>
+            <span class="flex items-center gap-1.5"><span style="display:inline-block;width:12px;height:2px;border-top:2px dashed rgba(244,239,227,0.35);"></span>去年</span>
+          </div>
         </div>
 
         <div class="mb-5">
@@ -536,6 +555,7 @@
   const fAmount = document.getElementById('fAmount');
   const fDate = document.getElementById('fDate');
   const fFirstPaymentDate = document.getElementById('fFirstPaymentDate');
+  const fNote = document.getElementById('fNote');
   const fInstallments = document.getElementById('fInstallments');
   const fRate = document.getElementById('fRate');
   const previewFirstPeriod = document.getElementById('previewFirstPeriod');
@@ -585,6 +605,7 @@
       rate: parseFloat(fRate.value) || 0,
     };
     if(fFirstPaymentDate.value) record.firstPaymentDate = fFirstPaymentDate.value;
+    if(fNote.value.trim()) record.note = fNote.value.trim();
     if(!record.name || !record.amount || !record.date){ return; }
 
     records.push(record);
@@ -598,10 +619,12 @@
     fRate.value = 0;
     fDate.value = new Date().toISOString().slice(0,10);
     fFirstPaymentDate.value = '';
+    fNote.value = '';
     updatePreview();
 
     renderAllRecords();
     renderMonth();
+    checkBackupReminder();
   });
 
   function deleteRecord(id){
@@ -681,7 +704,7 @@
       div.style.background = 'rgba(244,239,227,0.06)';
       div.innerHTML = `
         <div class="min-w-0 pr-3 flex-1">
-          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)} <span class="text-[10px] font-mono opacity-40">[${escapeHtml(recCategory(r))}]</span></p>
+          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)} <span class="text-[10px] font-mono opacity-40">[${escapeHtml(recCategory(r))}]</span>${r.note ? ' 📝' : ''}</p>
           <p class="text-[11px] font-mono mt-0.5" style="color:rgba(244,239,227,0.45);">
             ${r.date} ・ ${detail}
           </p>
@@ -902,7 +925,7 @@
             ${monthSelectMode === 'delete' ? `<input type="checkbox" class="selChkM shrink-0 mt-0.5 w-4 h-4" data-id="${r.id}" ${monthSelectedIds.has(r.id) ? 'checked' : ''}>` : ''}
             ${monthSelectMode === 'pay' ? `<input type="checkbox" class="selChkPay shrink-0 mt-0.5 w-4 h-4" data-key="${payKey}" ${monthPaySelectedKeys.has(payKey) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
-              <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}</p>
+              <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}${r.note ? ' 📝' : ''}</p>
               <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategory(r))}</p>
             </div>
           </div>
@@ -1044,11 +1067,51 @@
     return { monthlyTotals, categoryTotals, yearTotal, itemCount };
   }
 
+  // 產生消費趨勢折線圖 SVG（今年實線，去年虛線做對照）
+  function buildTrendSVG(currentData, prevData){
+    const w = 328, h = 130, padTop = 12, padBottom = 20, padX = 10;
+    const maxVal = Math.max(...currentData, ...prevData, 1);
+    const innerW = w - padX * 2;
+    const innerH = h - padTop - padBottom;
+    const stepX = innerW / 11;
+
+    function coord(val, i){
+      const x = padX + i * stepX;
+      const y = padTop + innerH - (val / maxVal) * innerH;
+      return [x, y];
+    }
+    function toPolyline(data){
+      return data.map((v,i) => coord(v,i).map(n => n.toFixed(1)).join(',')).join(' ');
+    }
+
+    const hasPrev = prevData.some(v => v > 0);
+    const dots = currentData.map((v,i) => {
+      const [x,y] = coord(v,i);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="var(--thread)" />`;
+    }).join('');
+    const monthLabels = currentData.map((_,i) => {
+      const [x] = coord(0,i);
+      return `<text x="${x.toFixed(1)}" y="${h-4}" font-size="8" fill="rgba(244,239,227,0.4)" text-anchor="middle">${i+1}</text>`;
+    }).join('');
+
+    return `
+      <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="overflow:visible; display:block;">
+        ${hasPrev ? `<polyline points="${toPolyline(prevData)}" fill="none" stroke="rgba(244,239,227,0.3)" stroke-width="1.5" stroke-dasharray="4,3" />` : ''}
+        <polyline points="${toPolyline(currentData)}" fill="none" stroke="var(--thread)" stroke-width="2" />
+        ${dots}
+        ${monthLabels}
+      </svg>
+    `;
+  }
+
   function renderYear(){
     document.getElementById('yearLabel').textContent = `${viewYearOnly}年`;
 
     const { monthlyTotals, categoryTotals, yearTotal, itemCount } = computeYearData(viewYearOnly);
     const prevYearData = computeYearData(viewYearOnly - 1);
+
+    document.getElementById('yearTrendChart').innerHTML = buildTrendSVG(monthlyTotals, prevYearData.monthlyTotals);
+    document.getElementById('yearTrendLegend').classList.toggle('hidden', !prevYearData.monthlyTotals.some(v => v > 0));
 
     document.getElementById('yearTotal').textContent = fmtMoney(yearTotal);
     document.getElementById('yearCount').textContent = `共 ${itemCount} 筆`;
@@ -1120,7 +1183,76 @@
   });
 
   // ---------- 資料備份／還原（用於搬移 Safari 分頁 ↔ 加到主畫面 之間各自獨立的 localStorage）----------
+  const LAST_BACKUP_KEY = 'wardrobeLedgerLastBackup';
   document.getElementById('backupBtn').addEventListener('click', openBackupPanel);
+  document.getElementById('backupReminderBtn').addEventListener('click', openBackupPanel);
+
+  function getLastBackupDate(){
+    return localStorage.getItem(LAST_BACKUP_KEY);
+  }
+  function markBackedUpNow(){
+    localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString());
+    checkBackupReminder();
+  }
+  function checkBackupReminder(){
+    const banner = document.getElementById('backupReminder');
+    const textEl = document.getElementById('backupReminderText');
+    if(records.length === 0){
+      banner.classList.add('hidden');
+      return;
+    }
+    const last = getLastBackupDate();
+    if(!last){
+      textEl.textContent = '你還沒有備份過資料，建議先備份一次，避免資料遺失';
+      banner.classList.remove('hidden');
+      return;
+    }
+    const daysSince = Math.floor((Date.now() - new Date(last).getTime()) / (1000*60*60*24));
+    if(daysSince >= 30){
+      textEl.textContent = `距離上次備份已經 ${daysSince} 天了，建議備份一下`;
+      banner.classList.remove('hidden');
+    }else{
+      banner.classList.add('hidden');
+    }
+  }
+
+  // ---------- CSV 匯出 ----------
+  function csvEscape(val){
+    const s = String(val);
+    if(/[",\r\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+    return s;
+  }
+  function exportCSV(){
+    const header = ['品項名稱','類別','購買日期','期別','應繳月份','金額','已繳','備註'];
+    const rows = [header];
+    records.forEach(r => {
+      for(let p = 1; p <= r.installments; p++){
+        const d = shiftMonths(periodBaseDate(r), p - 1);
+        const dueMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        rows.push([
+          r.name,
+          recCategory(r),
+          r.date,
+          `${p}/${r.installments}`,
+          dueMonth,
+          perPeriodAmount(r, p),
+          isPeriodPaid(r, p) ? '是' : '否',
+          r.note || '',
+        ]);
+      }
+    });
+    const csvContent = '\uFEFF' + rows.map(row => row.map(csvEscape).join(',')).join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `置裝帳本_匯出_${dateStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   function openBackupPanel(){
     const exportData = JSON.stringify({ records, wishlist, exportedAt: new Date().toISOString() });
@@ -1132,7 +1264,8 @@
 
       <p class="text-xs font-medium mb-1.5">① 匯出（複製這段文字）</p>
       <textarea id="backupExportText" readonly rows="5" class="w-full mb-2 px-3 py-2 rounded-lg text-xs font-mono" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">${escapeHtml(exportData)}</textarea>
-      <button id="backupCopyBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide mb-5" style="background:var(--sage); color:var(--ink);">📋 複製</button>
+      <button id="backupCopyBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide mb-2" style="background:var(--sage); color:var(--ink);">📋 複製</button>
+      <button id="csvExportBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide mb-5" style="background:rgba(15,27,45,0.08); color:var(--ink);">📊 匯出 CSV（給 Excel 用）</button>
 
       <div class="stitch-line mb-5"></div>
 
@@ -1147,6 +1280,10 @@
 
     document.getElementById('backupCloseBtn').addEventListener('click', closeDetail);
 
+    document.getElementById('csvExportBtn').addEventListener('click', ()=>{
+      exportCSV();
+    });
+
     document.getElementById('backupCopyBtn').addEventListener('click', async ()=>{
       const ta = document.getElementById('backupExportText');
       ta.select();
@@ -1158,6 +1295,7 @@
           copied = true;
         }
       }catch(err){ /* fall back to manual select */ }
+      if(copied) markBackedUpNow();
       const btn = document.getElementById('backupCopyBtn');
       btn.textContent = copied ? '✓ 已複製' : '已選取，請手動複製（長按貼上）';
       setTimeout(()=>{ btn.textContent = '📋 複製'; }, 2000);
@@ -1268,6 +1406,11 @@
 
       ${canInfer ? `<p class="text-[11px] mt-3 opacity-50">＊此筆利率未記錄，依 ${r.installments} 期的常見利率（${displayRate}%）推算，僅供參考，不影響實際每期應繳金額</p>` : ''}
 
+      ${r.note ? `
+      <div class="stitch-line my-4"></div>
+      <p class="text-xs opacity-60 mb-1">備註</p>
+      <p class="text-sm leading-relaxed">${escapeHtml(r.note)}</p>` : ''}
+
       ${!isOneTime ? `
       <button id="detailPayToggleBtn" class="btn-press w-full py-2.5 mt-4 rounded-lg text-sm font-display tracking-wide"
         style="background:${isPeriodPaid(r, currentPeriod) ? 'rgba(107,138,92,0.22); color:var(--sage)' : 'rgba(15,27,45,0.08); color:rgba(15,27,45,0.65)'};">
@@ -1322,6 +1465,10 @@
           <div>
             <label class="block text-xs opacity-60 mb-1">首期付款日期（選填，留空＝同購買日期）</label>
             <input id="editFirstPaymentDate" type="date" value="${r.firstPaymentDate || ''}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+          <div>
+            <label class="block text-xs opacity-60 mb-1">備註（選填）</label>
+            <input id="editNote" type="text" value="${escapeHtml(r.note || '')}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
           </div>
           <div>
             <label class="block text-xs opacity-60 mb-1">分期期數${editMode==='custom' ? '（逐期模式下，如需變更期數請先改用公式計算）' : ''}</label>
@@ -1392,6 +1539,7 @@
         const category = document.getElementById('editCategory').value;
         const date = document.getElementById('editDate').value;
         const firstPaymentDate = document.getElementById('editFirstPaymentDate').value;
+        const note = document.getElementById('editNote').value.trim();
         if(!name || !date){ alert('品項名稱與購買日期不能空白'); return; }
 
         const idx = records.findIndex(rec => rec.id === r.id);
@@ -1416,6 +1564,8 @@
         }
         if(firstPaymentDate) records[idx].firstPaymentDate = firstPaymentDate;
         else delete records[idx].firstPaymentDate;
+        if(note) records[idx].note = note;
+        else delete records[idx].note;
 
         saveRecords(records);
         renderAllRecords();
@@ -1749,6 +1899,7 @@
   renderAllRecords();
   renderMonth();
   renderWishlist();
+  checkBackupReminder();
 </script>
 
 </body>
