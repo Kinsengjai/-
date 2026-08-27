@@ -1069,19 +1069,24 @@
 
   // 產生消費趨勢折線圖 SVG（今年實線，去年虛線做對照）
   function buildTrendSVG(currentData, prevData){
-    const w = 328, h = 130, padTop = 12, padBottom = 20, padX = 10;
+    const w = 328, h = 130, padTop = 12, padBottom = 20, padLeft = 46, padRight = 10;
     const maxVal = Math.max(...currentData, ...prevData, 1);
-    const innerW = w - padX * 2;
+    const innerW = w - padLeft - padRight;
     const innerH = h - padTop - padBottom;
     const stepX = innerW / 11;
 
     function coord(val, i){
-      const x = padX + i * stepX;
+      const x = padLeft + i * stepX;
       const y = padTop + innerH - (val / maxVal) * innerH;
       return [x, y];
     }
     function toPolyline(data){
       return data.map((v,i) => coord(v,i).map(n => n.toFixed(1)).join(',')).join(' ');
+    }
+    function compactMoney(v){
+      if(v <= 0) return '$0';
+      if(v >= 1000) return '$' + (Math.round(v/100)/10) + 'k';
+      return '$' + Math.round(v);
     }
 
     const hasPrev = prevData.some(v => v > 0);
@@ -1094,8 +1099,20 @@
       return `<text x="${x.toFixed(1)}" y="${h-4}" font-size="8" fill="rgba(244,239,227,0.4)" text-anchor="middle">${i+1}</text>`;
     }).join('');
 
+    // Y 軸刻度：0～最大值等分 4 條水平參考線
+    const gridLevels = 4;
+    let gridLines = '';
+    for(let g = 0; g < gridLevels; g++){
+      const frac = g / (gridLevels - 1);
+      const val = maxVal * frac;
+      const y = padTop + innerH - frac * innerH;
+      gridLines += `<line x1="${padLeft}" y1="${y.toFixed(1)}" x2="${w-padRight}" y2="${y.toFixed(1)}" stroke="rgba(244,239,227,0.1)" stroke-width="1" />`;
+      gridLines += `<text x="${padLeft-6}" y="${(y+2.5).toFixed(1)}" font-size="8" fill="rgba(244,239,227,0.4)" text-anchor="end">${compactMoney(val)}</text>`;
+    }
+
     return `
       <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="overflow:visible; display:block;">
+        ${gridLines}
         ${hasPrev ? `<polyline points="${toPolyline(prevData)}" fill="none" stroke="rgba(244,239,227,0.3)" stroke-width="1.5" stroke-dasharray="4,3" />` : ''}
         <polyline points="${toPolyline(currentData)}" fill="none" stroke="var(--thread)" stroke-width="2" />
         ${dots}
