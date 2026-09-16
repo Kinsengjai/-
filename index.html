@@ -141,6 +141,18 @@
 
     <!-- ============ TAB 1: 新增消費 ============ -->
     <section id="panelAdd">
+      <button id="addPageSummary" type="button" class="btn-press w-full mb-4 p-4 rounded-xl flex items-center justify-between text-left rise-in" style="background:rgba(244,239,227,0.06); border:1px solid rgba(244,239,227,0.12);">
+        <div>
+          <p class="text-[11px] opacity-50">本月應繳</p>
+          <p id="addPageMonthTotal" class="font-mono font-bold text-lg" style="color:var(--paper);">$0</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[11px] opacity-50">剩餘未繳</p>
+          <p id="addPageRemaining" class="font-mono font-bold text-lg" style="color:var(--rust);">$0</p>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(244,239,227,0.4)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 ml-2"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+
       <form id="addForm" class="tag-card stitch-edge p-5 rise-in">
         <div class="tag-hole"></div>
         <p class="font-display text-xs tracking-widest mb-3" style="color:var(--rust);">NEW PURCHASE</p>
@@ -149,8 +161,8 @@
         <input id="fName" type="text" required placeholder="例如：DAIWA 防風外套"
           class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
 
-        <label class="block text-xs font-medium mb-1 opacity-70">類別</label>
-        <select id="fCategory" class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);"></select>
+        <label class="block text-xs font-medium mb-1 opacity-70">類別（可複選）</label>
+        <div id="fCategoryPicker" class="flex flex-wrap gap-1.5 mb-3"></div>
 
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div>
@@ -371,7 +383,8 @@
         </div>
 
         <div>
-          <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">類別佔比</p>
+          <p class="font-display text-xs tracking-widest mb-1 px-1" style="color:rgba(244,239,227,0.45);">類別佔比</p>
+          <p class="text-[11px] mb-2 px-1 opacity-40">單筆若有多個標籤，會分別計入各標籤，總和可能超過 100%</p>
           <div id="yearCategoryBars" class="space-y-2"></div>
           <p id="yearCategoryEmpty" class="text-center text-sm py-6 hidden" style="color:rgba(244,239,227,0.35);">這一年沒有支出紀錄</p>
         </div>
@@ -388,8 +401,8 @@
         <input id="wName" type="text" required placeholder="例如：Patagonia 刷毛外套"
           class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);">
 
-        <label class="block text-xs font-medium mb-1 opacity-70">類別</label>
-        <select id="wCategory" class="w-full mb-3 px-3 py-2.5 rounded-lg text-sm" style="background:#fff; border:1px solid rgba(15,27,45,0.15); color:var(--ink);"></select>
+        <label class="block text-xs font-medium mb-1 opacity-70">類別（可複選）</label>
+        <div id="wCategoryPicker" class="flex flex-wrap gap-1.5 mb-3"></div>
 
         <div class="grid grid-cols-2 gap-3 mb-4">
           <div>
@@ -417,6 +430,9 @@
 
   </main>
 </div>
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed left-1/2 z-50 px-4 py-3 rounded-lg text-sm font-display shadow-lg" style="bottom:max(1.5rem, calc(env(safe-area-inset-bottom) + 1rem)); transform:translateX(-50%); background:var(--ink); color:var(--paper); transition:opacity .3s ease;"></div>
 
 <!-- Detail Modal -->
 <div id="detailModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background:rgba(0,0,0,0.6);">
@@ -450,6 +466,18 @@
   // ---------- Helpers ----------
   function fmtMoney(n){
     return '$' + Math.round(n).toLocaleString('en-US');
+  }
+  let toastTimer = null;
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    clearTimeout(toastTimer);
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    t.style.opacity = '1';
+    toastTimer = setTimeout(()=>{
+      t.style.opacity = '0';
+      setTimeout(()=> t.classList.add('hidden'), 300);
+    }, 2200);
   }
   // 總金額（含利率）四捨五入後，平均攤分到每一期；除不盡的餘數計入第 1 期
   // 若紀錄帶有 customAmounts（逐期實際金額，例如批次匯入時完整還原的資料），一律優先採用，不重新計算
@@ -491,6 +519,7 @@
   document.getElementById('tabBtnAdd').addEventListener('click', ()=>tabSwitch('add'));
   document.getElementById('tabBtnOverview').addEventListener('click', ()=>tabSwitch('overview'));
   document.getElementById('tabBtnWishlist').addEventListener('click', ()=>tabSwitch('wishlist'));
+  document.getElementById('addPageSummary').addEventListener('click', ()=>tabSwitch('overview'));
 
   // ---------- Add form ----------
   const CATEGORIES = ['外套','長袖Tee','短袖Tee','襯衫','長褲','短褲','鞋子','帽子','襪子','飾品','包包','配件','內著','跑步用品','運費','綜合(未拆分)','其他'];
@@ -502,12 +531,42 @@
   function categoryGroupOf(cat){
     return CATEGORY_GROUPS[cat] || cat || '其他';
   }
-  function recCategory(r){
-    return r.category || '其他';
+  // 取得紀錄的類別陣列（可複選）；相容舊資料的單一 category 欄位
+  function recCategories(r){
+    if(Array.isArray(r.categories) && r.categories.length) return r.categories;
+    if(r.category) return [r.category];
+    return ['其他'];
+  }
+  function recCategoryLabel(r){
+    return recCategories(r).join('、');
   }
   // 分期起算基準日：優先用「首期付款日期」，沒填就用購買日期
   function periodBaseDate(r){
     return r.firstPaymentDate || r.date;
+  }
+
+  // 可複選標籤選擇器：selectedArr 是外部維護的陣列（會被直接修改），containerId 是要渲染 chip 的容器
+  function renderTagPicker(containerId, selectedArr){
+    const container = document.getElementById(containerId);
+    container.innerHTML = CATEGORIES.map(cat => `<button type="button" class="tagChip btn-press px-2.5 py-1.5 rounded-full text-xs" data-cat="${escapeHtml(cat)}">${escapeHtml(cat)}</button>`).join('');
+    function paint(){
+      container.querySelectorAll('.tagChip').forEach(btn => {
+        const active = selectedArr.includes(btn.dataset.cat);
+        btn.style.background = active ? 'var(--thread)' : 'rgba(15,27,45,0.06)';
+        btn.style.color = active ? 'var(--ink)' : 'rgba(15,27,45,0.65)';
+        btn.style.fontWeight = active ? '600' : '400';
+      });
+    }
+    container.querySelectorAll('.tagChip').forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        const cat = btn.dataset.cat;
+        const idx = selectedArr.indexOf(cat);
+        if(idx === -1) selectedArr.push(cat);
+        else selectedArr.splice(idx, 1);
+        paint();
+      });
+    });
+    paint();
   }
 
   // ---------- 付款狀態（已繳／未繳） ----------
@@ -549,9 +608,23 @@
     });
     return total;
   }
+  // 「本月」是指今天實際所在的年月，跟每月總覽目前瀏覽到哪個月無關
+  function computeThisMonthTotal(){
+    const y = today.getFullYear(), m = today.getMonth();
+    let total = 0;
+    records.forEach(r => {
+      const d = new Date(periodBaseDate(r) + 'T00:00:00');
+      const diff = ymKey(y, m) - ymKey(d.getFullYear(), d.getMonth());
+      if(diff >= 0 && diff < r.installments) total += perPeriodAmount(r, diff + 1);
+    });
+    return total;
+  }
+  function updateAddPageSummary(){
+    document.getElementById('addPageMonthTotal').textContent = fmtMoney(computeThisMonthTotal());
+    document.getElementById('addPageRemaining').textContent = fmtMoney(computeRemainingBalance());
+  }
 
   const fName = document.getElementById('fName');
-  const fCategory = document.getElementById('fCategory');
   const fAmount = document.getElementById('fAmount');
   const fDate = document.getElementById('fDate');
   const fFirstPaymentDate = document.getElementById('fFirstPaymentDate');
@@ -561,12 +634,8 @@
   const previewFirstPeriod = document.getElementById('previewFirstPeriod');
   const previewLaterPeriod = document.getElementById('previewLaterPeriod');
 
-  CATEGORIES.forEach(cat => {
-    const opt = document.createElement('option');
-    opt.value = cat;
-    opt.textContent = cat;
-    fCategory.appendChild(opt);
-  });
+  let fSelectedCategories = ['其他'];
+  renderTagPicker('fCategoryPicker', fSelectedCategories);
 
   // default date = today
   fDate.value = new Date().toISOString().slice(0,10);
@@ -598,7 +667,7 @@
     const record = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       name: fName.value.trim(),
-      category: fCategory.value || '其他',
+      categories: fSelectedCategories.length ? [...fSelectedCategories] : ['其他'],
       amount: parseFloat(fAmount.value) || 0,
       date: fDate.value,
       installments: Math.max(parseInt(fInstallments.value) || 1, 1),
@@ -610,10 +679,12 @@
 
     records.push(record);
     saveRecords(records);
+    showToast(`✓ 已新增「${record.name}」`);
 
     // reset form
     fName.value = '';
-    fCategory.value = '其他';
+    fSelectedCategories = ['其他'];
+    renderTagPicker('fCategoryPicker', fSelectedCategories);
     fAmount.value = '';
     fInstallments.value = 1;
     fRate.value = 0;
@@ -680,7 +751,7 @@
     const allSorted = [...records].sort((a,b) => b.date.localeCompare(a.date));
     const sorted = allSorted.filter(r => {
       if(query && !r.name.toLowerCase().includes(query)) return false;
-      if(catFilter && recCategory(r) !== catFilter) return false;
+      if(catFilter && !recCategories(r).includes(catFilter)) return false;
       return true;
     });
 
@@ -704,7 +775,7 @@
       div.style.background = 'rgba(244,239,227,0.06)';
       div.innerHTML = `
         <div class="min-w-0 pr-3 flex-1">
-          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)} <span class="text-[10px] font-mono opacity-40">[${escapeHtml(recCategory(r))}]</span>${r.note ? ' 📝' : ''}</p>
+          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)} <span class="text-[10px] font-mono opacity-40">[${escapeHtml(recCategoryLabel(r))}]</span>${r.note ? ' 📝' : ''}</p>
           <p class="text-[11px] font-mono mt-0.5" style="color:rgba(244,239,227,0.45);">
             ${r.date} ・ ${detail}
           </p>
@@ -874,6 +945,7 @@
     document.getElementById('monthLabel').textContent = `${viewYear}年 ${String(viewMonth+1).padStart(2,'0')}月`;
     document.getElementById('monthPicker').value = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
     document.getElementById('remainingBalance').textContent = fmtMoney(computeRemainingBalance());
+    updateAddPageSummary();
 
     const items = [];
     records.forEach(r => {
@@ -926,7 +998,7 @@
             ${monthSelectMode === 'pay' ? `<input type="checkbox" class="selChkPay shrink-0 mt-0.5 w-4 h-4" data-key="${payKey}" ${monthPaySelectedKeys.has(payKey) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
               <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}${r.note ? ' 📝' : ''}</p>
-              <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategory(r))}</p>
+              <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategoryLabel(r))}</p>
             </div>
           </div>
           ${inSelectMode ? '' : `
@@ -1056,8 +1128,10 @@
         if(d.getFullYear() === year){
           const amt = perPeriodAmount(r, p);
           monthlyTotals[d.getMonth()] += amt;
-          const group = categoryGroupOf(recCategory(r));
-          categoryTotals[group] = (categoryTotals[group] || 0) + amt;
+          recCategories(r).forEach(cat => {
+            const group = categoryGroupOf(cat);
+            categoryTotals[group] = (categoryTotals[group] || 0) + amt;
+          });
           itemCount++;
         }
       }
@@ -1248,7 +1322,7 @@
         const dueMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         rows.push([
           r.name,
-          recCategory(r),
+          recCategoryLabel(r),
           r.date,
           `${p}/${r.installments}`,
           dueMonth,
@@ -1404,7 +1478,7 @@
       <p class="text-lg font-semibold mb-4 pr-6">${escapeHtml(r.name)}</p>
 
       <div class="space-y-2.5 text-sm">
-        <div class="flex justify-between"><span class="opacity-60">類別</span><span class="font-mono">${escapeHtml(recCategory(r))}</span></div>
+        <div class="flex justify-between"><span class="opacity-60">類別</span><span class="font-mono">${escapeHtml(recCategoryLabel(r))}</span></div>
         <div class="flex justify-between"><span class="opacity-60">購買日期</span><span class="font-mono">${r.date}</span></div>
         ${!isOneTime && r.firstPaymentDate && r.firstPaymentDate !== r.date ? `<div class="flex justify-between"><span class="opacity-60">首期付款日期</span><span class="font-mono">${r.firstPaymentDate}</span></div>` : ''}
         <div class="flex justify-between"><span class="opacity-60">分期方式</span><span class="font-mono">${isOneTime ? '一次付清' : `${r.installments} 期`}</span></div>
@@ -1455,6 +1529,7 @@
   function openEdit(r, currentPeriod){
     let editMode = r.customAmounts ? 'custom' : 'formula';
     let editInstallments = r.installments;
+    let editSelectedCategories = [...recCategories(r)];
     let editCustomAmounts = r.customAmounts
       ? [...r.customAmounts]
       : Array.from({length: r.installments}, (_, i) => perPeriodAmount(r, i+1));
@@ -1470,10 +1545,8 @@
             <input id="editName" type="text" value="${escapeHtml(r.name)}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
           </div>
           <div>
-            <label class="block text-xs opacity-60 mb-1">類別</label>
-            <select id="editCategory" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
-              ${CATEGORIES.map(cat => `<option value="${cat}" ${recCategory(r) === cat ? 'selected' : ''}>${cat}</option>`).join('')}
-            </select>
+            <label class="block text-xs opacity-60 mb-1">類別（可複選）</label>
+            <div id="editCategoryPicker" class="flex flex-wrap gap-1.5"></div>
           </div>
           <div>
             <label class="block text-xs opacity-60 mb-1">購買日期</label>
@@ -1551,9 +1624,10 @@
       }
 
       document.getElementById('editCancelBtn').addEventListener('click', ()=> openDetail(r, currentPeriod));
+      renderTagPicker('editCategoryPicker', editSelectedCategories);
       document.getElementById('editSaveBtn').addEventListener('click', ()=>{
         const name = document.getElementById('editName').value.trim();
-        const category = document.getElementById('editCategory').value;
+        const categories = editSelectedCategories.length ? [...editSelectedCategories] : ['其他'];
         const date = document.getElementById('editDate').value;
         const firstPaymentDate = document.getElementById('editFirstPaymentDate').value;
         const note = document.getElementById('editNote').value.trim();
@@ -1565,7 +1639,7 @@
         if(editMode === 'custom'){
           records[idx] = {
             ...records[idx],
-            name, category, date,
+            name, categories, date,
             installments: editInstallments,
             amount: editCustomAmounts.reduce((s,a) => s + a, 0),
             rate: 0,
@@ -1575,10 +1649,11 @@
           const inst = Math.max(parseInt(document.getElementById('editInstallments').value) || 1, 1);
           const amt = parseFloat(document.getElementById('editAmount').value) || 0;
           const rate = parseFloat(document.getElementById('editRate').value) || 0;
-          const updated = { ...records[idx], name, category, date, installments: inst, amount: amt, rate };
+          const updated = { ...records[idx], name, categories, date, installments: inst, amount: amt, rate };
           delete updated.customAmounts;
           records[idx] = updated;
         }
+        delete records[idx].category;
         if(firstPaymentDate) records[idx].firstPaymentDate = firstPaymentDate;
         else delete records[idx].firstPaymentDate;
         if(note) records[idx].note = note;
@@ -1809,23 +1884,18 @@
 
   // ---------- Wishlist ----------
   const wName = document.getElementById('wName');
-  const wCategory = document.getElementById('wCategory');
   const wPrice = document.getElementById('wPrice');
   const wNote = document.getElementById('wNote');
 
-  CATEGORIES.forEach(cat => {
-    const opt = document.createElement('option');
-    opt.value = cat;
-    opt.textContent = cat;
-    wCategory.appendChild(opt);
-  });
+  let wSelectedCategories = ['其他'];
+  renderTagPicker('wCategoryPicker', wSelectedCategories);
 
   document.getElementById('wishlistForm').addEventListener('submit', (e)=>{
     e.preventDefault();
     const item = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       name: wName.value.trim(),
-      category: wCategory.value || '其他',
+      categories: wSelectedCategories.length ? [...wSelectedCategories] : ['其他'],
       price: wPrice.value ? parseFloat(wPrice.value) : null,
       note: wNote.value.trim(),
       addedDate: new Date().toISOString().slice(0,10),
@@ -1834,9 +1904,11 @@
 
     wishlist.push(item);
     saveWishlist(wishlist);
+    showToast(`🌟 已加入願望清單「${item.name}」`);
 
     wName.value = '';
-    wCategory.value = '其他';
+    wSelectedCategories = ['其他'];
+    renderTagPicker('wCategoryPicker', wSelectedCategories);
     wPrice.value = '';
     wNote.value = '';
 
@@ -1845,6 +1917,10 @@
 
   function isUrl(str){
     return /^https?:\/\//i.test(str.trim());
+  }
+
+  function wishlistCategoryLabel(item){
+    return (Array.isArray(item.categories) && item.categories.length ? item.categories : [item.category || '其他']).join('、');
   }
 
   function deleteWishlistItem(id){
@@ -1861,7 +1937,8 @@
 
     // 帶入新增消費表單
     fName.value = item.name;
-    fCategory.value = item.category || '其他';
+    fSelectedCategories = Array.isArray(item.categories) && item.categories.length ? [...item.categories] : [item.category || '其他'];
+    renderTagPicker('fCategoryPicker', fSelectedCategories);
     fAmount.value = item.price || '';
     fDate.value = new Date().toISOString().slice(0,10);
     updatePreview();
@@ -1889,7 +1966,7 @@
         <div class="flex items-start justify-between gap-3 pr-6">
           <div class="min-w-0">
             <p class="text-sm font-semibold truncate">${escapeHtml(item.name)}</p>
-            <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(item.category)}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
+            <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(wishlistCategoryLabel(item))}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
             ${item.note ? (isUrl(item.note)
               ? `<a href="${escapeHtml(item.note)}" target="_blank" rel="noopener" class="text-xs underline mt-1 inline-block" style="color:var(--rust);">🔗 查看連結</a>`
               : `<p class="text-xs opacity-60 mt-1">${escapeHtml(item.note)}</p>`) : ''}
