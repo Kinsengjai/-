@@ -423,9 +423,19 @@
         </button>
       </form>
 
-      <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">想買的東西 <span id="wishlistCount"></span></p>
+      <div class="flex items-center justify-between mb-2 px-1">
+        <p class="font-display text-xs tracking-widest" style="color:rgba(244,239,227,0.45);">想買的東西 <span id="wishlistCount"></span></p>
+        <button id="wishlistSelectModeToggle" type="button" class="text-[11px] underline" style="color:var(--thread-soft);">勾選計算金額</button>
+      </div>
       <div id="wishlistList" class="space-y-2"></div>
       <p id="wishlistEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">還沒有想買的東西 🌟</p>
+
+      <div id="wishlistSelectBar" class="hidden tag-card stitch-edge p-4 mt-3 rise-in">
+        <div class="tag-hole"></div>
+        <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">已選金額</p>
+        <p id="wishlistSelectedTotal" class="font-mono font-bold text-2xl">$0</p>
+        <p id="wishlistSelectedCount" class="text-xs opacity-60 mt-1">已選 0 項</p>
+      </div>
     </section>
 
   </main>
@@ -1949,6 +1959,90 @@
     tabSwitch('add');
   }
 
+  function openWishlistEdit(id){
+    const item = wishlist.find(w => w.id === id);
+    if(!item) return;
+
+    // wishlist 項目的分類陣列，相容舊資料的單一 category 欄位
+    let editWishCategories = Array.isArray(item.categories) && item.categories.length ? [...item.categories] : [item.category || '其他'];
+
+    detailModalContent.innerHTML = `
+      <div class="tag-hole"></div>
+      <p class="font-display text-xs tracking-widest mb-3" style="color:var(--rust);">編輯願望清單項目</p>
+
+      <div class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs opacity-60 mb-1">品項名稱</label>
+          <input id="editWishName" type="text" value="${escapeHtml(item.name)}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">類別（可複選）</label>
+          <div id="editWishCategoryPicker" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs opacity-60 mb-1">預估金額</label>
+            <input id="editWishPrice" type="number" min="0" step="1" value="${item.price || ''}" class="w-full px-3 py-2 rounded-lg text-sm font-mono" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+          <div>
+            <label class="block text-xs opacity-60 mb-1">連結／備註</label>
+            <input id="editWishNote" type="text" value="${escapeHtml(item.note || '')}" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 mt-5">
+        <button id="editWishSaveBtn" type="button" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--sage); color:var(--ink);">儲存</button>
+        <button id="editWishCancelBtn" type="button" class="btn-press px-4 py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(15,27,45,0.08); color:var(--ink);">取消</button>
+      </div>
+    `;
+    detailModal.classList.remove('hidden');
+    renderTagPicker('editWishCategoryPicker', editWishCategories);
+
+    document.getElementById('editWishCancelBtn').addEventListener('click', closeDetail);
+    document.getElementById('editWishSaveBtn').addEventListener('click', ()=>{
+      const name = document.getElementById('editWishName').value.trim();
+      if(!name){ alert('品項名稱不能空白'); return; }
+      const priceVal = document.getElementById('editWishPrice').value;
+      const note = document.getElementById('editWishNote').value.trim();
+
+      const idx = wishlist.findIndex(w => w.id === id);
+      if(idx === -1) return;
+      wishlist[idx] = {
+        ...wishlist[idx],
+        name,
+        categories: editWishCategories.length ? [...editWishCategories] : ['其他'],
+        price: priceVal ? parseFloat(priceVal) : null,
+        note,
+      };
+      delete wishlist[idx].category;
+      saveWishlist(wishlist);
+      renderWishlist();
+      closeDetail();
+      showToast(`✓ 已更新「${name}」`);
+    });
+  }
+
+  let wishlistSelectMode = false;
+  let wishlistSelectedIds = new Set();
+
+  function updateWishlistSelectedTotal(){
+    const selectedItems = wishlist.filter(w => wishlistSelectedIds.has(w.id));
+    const total = selectedItems.reduce((s, w) => s + (w.price || 0), 0);
+    const noPriceCount = selectedItems.filter(w => !w.price).length;
+    document.getElementById('wishlistSelectedTotal').textContent = fmtMoney(total);
+    document.getElementById('wishlistSelectedCount').textContent =
+      `已選 ${selectedItems.length} 項` + (noPriceCount > 0 ? `（${noPriceCount} 項沒填金額，未計入）` : '');
+  }
+
+  document.getElementById('wishlistSelectModeToggle').addEventListener('click', ()=>{
+    wishlistSelectMode = !wishlistSelectMode;
+    wishlistSelectedIds.clear();
+    document.getElementById('wishlistSelectModeToggle').textContent = wishlistSelectMode ? '取消勾選' : '勾選計算金額';
+    document.getElementById('wishlistSelectBar').classList.toggle('hidden', !wishlistSelectMode);
+    renderWishlist();
+  });
+
   function renderWishlist(){
     const wrap = document.getElementById('wishlistList');
     const empty = document.getElementById('wishlistEmpty');
@@ -1957,25 +2051,32 @@
     const sorted = [...wishlist].sort((a,b) => b.addedDate.localeCompare(a.addedDate));
     document.getElementById('wishlistCount').textContent = sorted.length > 0 ? `（${sorted.length} 項）` : '';
     empty.classList.toggle('hidden', sorted.length > 0);
+    document.getElementById('wishlistSelectModeToggle').classList.toggle('hidden', sorted.length === 0);
 
     sorted.forEach(item => {
       const card = document.createElement('div');
       card.className = 'tag-card stitch-edge p-4 rise-in';
+      card.dataset.id = item.id;
       card.innerHTML = `
         <div class="tag-hole"></div>
         <div class="flex items-start justify-between gap-3 pr-6">
-          <div class="min-w-0">
-            <p class="text-sm font-semibold truncate">${escapeHtml(item.name)}</p>
-            <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(wishlistCategoryLabel(item))}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
-            ${item.note ? (isUrl(item.note)
-              ? `<a href="${escapeHtml(item.note)}" target="_blank" rel="noopener" class="text-xs underline mt-1 inline-block" style="color:var(--rust);">🔗 查看連結</a>`
-              : `<p class="text-xs opacity-60 mt-1">${escapeHtml(item.note)}</p>`) : ''}
+          <div class="flex items-start gap-2.5 min-w-0">
+            ${wishlistSelectMode ? `<input type="checkbox" class="selChkWish shrink-0 mt-0.5 w-4 h-4" data-id="${item.id}" ${wishlistSelectedIds.has(item.id) ? 'checked' : ''}>` : ''}
+            <div class="min-w-0">
+              <p class="text-sm font-semibold truncate">${escapeHtml(item.name)}</p>
+              <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(wishlistCategoryLabel(item))}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
+              ${item.note ? (isUrl(item.note)
+                ? `<a href="${escapeHtml(item.note)}" target="_blank" rel="noopener" class="text-xs underline mt-1 inline-block" style="color:var(--rust);">🔗 查看連結</a>`
+                : `<p class="text-xs opacity-60 mt-1">${escapeHtml(item.note)}</p>`) : ''}
+            </div>
           </div>
         </div>
+        ${wishlistSelectMode ? '' : `
         <div class="flex gap-2 mt-3">
           <button data-id="${item.id}" class="convertBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:var(--sage); color:var(--ink);">🛒 已購買</button>
+          <button data-id="${item.id}" class="editWishBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(201,162,39,0.2); color:#8a6d10;">✏️ 編輯</button>
           <button data-id="${item.id}" class="delWishBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">刪除</button>
-        </div>
+        </div>`}
       `;
       wrap.appendChild(card);
     });
@@ -1983,9 +2084,31 @@
     wrap.querySelectorAll('.convertBtn').forEach(btn=>{
       btn.addEventListener('click', ()=> convertWishlistItem(btn.dataset.id));
     });
+    wrap.querySelectorAll('.editWishBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=> openWishlistEdit(btn.dataset.id));
+    });
     wrap.querySelectorAll('.delWishBtn').forEach(btn=>{
       btn.addEventListener('click', ()=> deleteWishlistItem(btn.dataset.id));
     });
+    wrap.querySelectorAll('.selChkWish').forEach(chk=>{
+      chk.addEventListener('change', ()=>{
+        if(chk.checked) wishlistSelectedIds.add(chk.dataset.id);
+        else wishlistSelectedIds.delete(chk.dataset.id);
+        updateWishlistSelectedTotal();
+      });
+    });
+    if(wishlistSelectMode){
+      wrap.querySelectorAll('.tag-card').forEach(card=>{
+        card.addEventListener('click', (e)=>{
+          const chk = card.querySelector('.selChkWish');
+          if(chk && e.target !== chk){
+            chk.checked = !chk.checked;
+            chk.dispatchEvent(new Event('change'));
+          }
+        });
+      });
+      updateWishlistSelectedTotal();
+    }
   }
 
   // ---------- Init ----------
