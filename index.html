@@ -321,28 +321,41 @@
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-3 mb-3 flex-wrap">
-          <button id="monthPayModeToggle" type="button" class="text-[11px] underline" style="color:var(--sage);">批次標記已繳</button>
-          <button id="monthSelectModeToggle" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">選取刪除</button>
-          <button id="monthDeleteAllBtn" type="button" class="text-[11px] underline" style="color:var(--rust);">清空全部紀錄</button>
+        <input id="monthSearch" type="text" placeholder="搜尋全部紀錄的品項…"
+          class="w-full mb-3 px-3 py-2 rounded-lg text-sm" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
+
+        <!-- 搜尋結果（從全部紀錄搜尋，分期品項只顯示一筆加總後的總金額） -->
+        <div id="monthSearchResultsWrap" class="hidden">
+          <p id="monthSearchResultsLabel" class="text-xs mb-2 px-1" style="color:rgba(244,239,227,0.5);"></p>
+          <div id="monthSearchResultsList" class="space-y-3"></div>
+          <p id="monthSearchNoMatch" class="hidden text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">沒有符合搜尋的紀錄</p>
         </div>
 
-        <div id="monthList" class="space-y-3"></div>
-        <p id="monthEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">這個月份沒有支出紀錄 🧵</p>
+        <!-- 一般月份檢視 -->
+        <div id="monthNormalView">
+          <div class="flex items-center justify-end gap-3 mb-3 flex-wrap">
+            <button id="monthPayModeToggle" type="button" class="text-[11px] underline" style="color:var(--sage);">批次標記已繳</button>
+            <button id="monthSelectModeToggle" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">選取刪除</button>
+            <button id="monthDeleteAllBtn" type="button" class="text-[11px] underline" style="color:var(--rust);">清空全部紀錄</button>
+          </div>
 
-        <div id="monthBulkDeleteBar" class="hidden mt-3">
-          <button id="monthDeleteSelectedBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--rust); color:#fff;">
-            刪除已選（<span id="monthSelectedCount">0</span>）
-          </button>
-        </div>
+          <div id="monthList" class="space-y-3"></div>
+          <p id="monthEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">這個月份沒有支出紀錄 🧵</p>
 
-        <div id="monthBulkPayBar" class="hidden mt-3 flex gap-2">
-          <button id="monthMarkPaidBtn" type="button" class="btn-press flex-1 py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--sage); color:var(--ink);">
-            標記已選為已繳（<span id="monthPaySelectedCount">0</span>）
-          </button>
-          <button id="monthMarkUnpaidBtn" type="button" class="btn-press px-4 py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:rgba(244,239,227,0.1); color:var(--paper);">
-            設為未繳
-          </button>
+          <div id="monthBulkDeleteBar" class="hidden mt-3">
+            <button id="monthDeleteSelectedBtn" type="button" class="btn-press w-full py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--rust); color:#fff;">
+              刪除已選（<span id="monthSelectedCount">0</span>）
+            </button>
+          </div>
+
+          <div id="monthBulkPayBar" class="hidden mt-3 flex gap-2">
+            <button id="monthMarkPaidBtn" type="button" class="btn-press flex-1 py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:var(--sage); color:var(--ink);">
+              標記已選為已繳（<span id="monthPaySelectedCount">0</span>）
+            </button>
+            <button id="monthMarkUnpaidBtn" type="button" class="btn-press px-4 py-2.5 rounded-lg text-sm font-display tracking-wide" style="background:rgba(244,239,227,0.1); color:var(--paper);">
+              設為未繳
+            </button>
+          </div>
         </div>
       </div>
 
@@ -814,6 +827,8 @@
   let monthSelectedIds = new Set();       // 刪除模式：記錄 id
   let monthPaySelectedKeys = new Set();   // 標記已繳模式：`${id}_${period}` 複合鍵
 
+  document.getElementById('monthSearch').addEventListener('input', renderMonth);
+
   document.getElementById('prevMonth').addEventListener('click', ()=>{
     viewMonth--; if(viewMonth < 0){ viewMonth = 11; viewYear--; }
     renderMonth();
@@ -974,12 +989,28 @@
 
     items.sort((a,b) => b.amount - a.amount);
 
+    // 總金額／已繳未繳／筆數統計一律以當月全部項目計算，不受搜尋影響
     const total = items.reduce((s,i) => s + i.amount, 0);
     const paidAmt = items.reduce((s,i) => s + (isPeriodPaid(i.record, i.period) ? i.amount : 0), 0);
     document.getElementById('monthTotal').textContent = fmtMoney(total);
     document.getElementById('monthCount').textContent = `共 ${items.length} 筆`;
     document.getElementById('monthPaidAmt').textContent = fmtMoney(paidAmt);
     document.getElementById('monthUnpaidAmt').textContent = fmtMoney(total - paidAmt);
+
+    // 有輸入搜尋關鍵字時，改成顯示「從全部紀錄搜尋」的結果（分期品項只顯示一筆加總後的總金額），
+    // 不受目前瀏覽到哪個月份限制；清空搜尋框則恢復原本的月份清單
+    const query = document.getElementById('monthSearch').value.trim().toLowerCase();
+    const searchWrap = document.getElementById('monthSearchResultsWrap');
+    const normalView = document.getElementById('monthNormalView');
+
+    if(query){
+      searchWrap.classList.remove('hidden');
+      normalView.classList.add('hidden');
+      renderMonthSearchResults(query);
+      return;
+    }
+    searchWrap.classList.add('hidden');
+    normalView.classList.remove('hidden');
 
     const list = document.getElementById('monthList');
     const empty = document.getElementById('monthEmpty');
@@ -1090,6 +1121,51 @@
         }
         const rec = records.find(r => r.id === card.dataset.id);
         if(rec) openDetail(rec, parseInt(card.dataset.period));
+      });
+    });
+  }
+
+  // 從「全部紀錄」搜尋（不受目前瀏覽月份限制），分期品項只顯示一筆加總後的總金額
+  function renderMonthSearchResults(query){
+    const matched = records.filter(r => r.name.toLowerCase().includes(query));
+    matched.sort((a,b) => b.date.localeCompare(a.date));
+
+    document.getElementById('monthSearchResultsLabel').textContent = `搜尋結果（全部紀錄，共 ${matched.length} 筆）`;
+
+    const list = document.getElementById('monthSearchResultsList');
+    const noMatch = document.getElementById('monthSearchNoMatch');
+    list.innerHTML = '';
+    noMatch.classList.toggle('hidden', matched.length > 0);
+
+    matched.forEach(r => {
+      const isOneTime = r.installments === 1;
+      const total = totalRounded(r);
+      const paidCount = Array.isArray(r.paidPeriods) ? r.paidPeriods.length : 0;
+
+      const card = document.createElement('div');
+      card.className = 'tag-card stitch-edge p-4 rise-in cursor-pointer';
+      card.dataset.id = r.id;
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}${r.note ? ' 📝' : ''}</p>
+            <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategoryLabel(r))}</p>
+          </div>
+        </div>
+        <div class="flex items-end justify-between mt-3">
+          <span class="font-mono font-bold text-lg">${fmtMoney(total)}</span>
+          <span class="text-xs font-display px-2 py-0.5 rounded" style="background:${isOneTime ? 'rgba(107,138,92,0.18); color:var(--sage)' : 'rgba(201,162,39,0.18); color:#8a6d10'};">
+            ${isOneTime ? '一次付清' : `共 ${r.installments} 期（已繳 ${paidCount}）`}
+          </span>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+
+    list.querySelectorAll('.tag-card').forEach(card => {
+      card.addEventListener('click', ()=>{
+        const rec = records.find(r => r.id === card.dataset.id);
+        if(rec) openDetail(rec, 1);
       });
     });
   }
