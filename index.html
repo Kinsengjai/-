@@ -440,6 +440,7 @@
         <p class="font-display text-xs tracking-widest" style="color:rgba(244,239,227,0.45);">想買的東西 <span id="wishlistCount"></span></p>
         <button id="wishlistSelectModeToggle" type="button" class="text-[11px] underline" style="color:var(--thread-soft);">勾選計算金額</button>
       </div>
+      <p class="text-[11px] mb-2 px-1 opacity-40">依優先順序排列，#1 最想買；用 ▲▼ 調整，新加入的項目會排在最後</p>
       <div id="wishlistList" class="space-y-2"></div>
       <p id="wishlistEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">還沒有想買的東西 🌟</p>
 
@@ -485,6 +486,15 @@
     localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(list));
   }
   let wishlist = loadWishlist();
+  // 一次性遷移：願望清單改成「陣列順序＝優先順序」，初始順序沿用舊版顯示（新加入的在上面）
+  if(!localStorage.getItem('wardrobeLedgerWishlistOrdered')){
+    wishlist = wishlist
+      .map((w, i) => ({ w, i }))
+      .sort((a, b) => (b.w.addedDate || '').localeCompare(a.w.addedDate || '') || a.i - b.i)
+      .map(x => x.w);
+    saveWishlist(wishlist);
+    localStorage.setItem('wardrobeLedgerWishlistOrdered', '1');
+  }
 
   // ---------- Helpers ----------
   function fmtMoney(n){
@@ -2099,6 +2109,24 @@
     });
   }
 
+  // 調整優先順序：up / down 與相鄰項目交換，top 移到最前面
+  function moveWishlistItem(id, act){
+    const idx = wishlist.findIndex(w => w.id === id);
+    if(idx === -1) return;
+    if(act === 'up' && idx > 0){
+      [wishlist[idx - 1], wishlist[idx]] = [wishlist[idx], wishlist[idx - 1]];
+    }else if(act === 'down' && idx < wishlist.length - 1){
+      [wishlist[idx + 1], wishlist[idx]] = [wishlist[idx], wishlist[idx + 1]];
+    }else if(act === 'top' && idx > 0){
+      const [item] = wishlist.splice(idx, 1);
+      wishlist.unshift(item);
+    }else{
+      return;
+    }
+    saveWishlist(wishlist);
+    renderWishlist();
+  }
+
   let wishlistSelectMode = false;
   let wishlistSelectedIds = new Set();
 
@@ -2124,19 +2152,28 @@
     const empty = document.getElementById('wishlistEmpty');
     wrap.innerHTML = '';
 
-    const sorted = [...wishlist].sort((a,b) => b.addedDate.localeCompare(a.addedDate));
+    // 陣列順序就是優先順序（第 1 個最想買）
+    const sorted = wishlist;
     document.getElementById('wishlistCount').textContent = sorted.length > 0 ? `（${sorted.length} 項）` : '';
     empty.classList.toggle('hidden', sorted.length > 0);
     document.getElementById('wishlistSelectModeToggle').classList.toggle('hidden', sorted.length === 0);
 
-    sorted.forEach(item => {
+    sorted.forEach((item, idx) => {
+      const isFirst = idx === 0;
+      const isLast = idx === sorted.length - 1;
+      const arrowStyle = (disabled) => `background:rgba(15,27,45,0.08); color:var(--ink); ${disabled ? 'opacity:0.25;' : ''}`;
       const card = document.createElement('div');
       card.className = 'tag-card stitch-edge p-4 rise-in';
       card.dataset.id = item.id;
       card.innerHTML = `
         <div class="tag-hole"></div>
-        <div class="flex items-start justify-between gap-3 pr-6">
-          <div class="flex items-start gap-2.5 min-w-0">
+        <div class="flex items-start gap-3 pr-6">
+          <div class="flex flex-col items-center gap-1 shrink-0">
+            ${wishlistSelectMode ? '' : `<button type="button" data-id="${item.id}" data-act="up" ${isFirst ? 'disabled' : ''} class="moveWishBtn btn-press w-7 h-7 rounded-full flex items-center justify-center text-xs" style="${arrowStyle(isFirst)}">▲</button>`}
+            <span class="font-display text-sm" style="color:var(--rust);">#${idx + 1}</span>
+            ${wishlistSelectMode ? '' : `<button type="button" data-id="${item.id}" data-act="down" ${isLast ? 'disabled' : ''} class="moveWishBtn btn-press w-7 h-7 rounded-full flex items-center justify-center text-xs" style="${arrowStyle(isLast)}">▼</button>`}
+          </div>
+          <div class="flex items-start gap-2.5 min-w-0 flex-1">
             ${wishlistSelectMode ? `<input type="checkbox" class="selChkWish shrink-0 mt-0.5 w-4 h-4" data-id="${item.id}" ${wishlistSelectedIds.has(item.id) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
               <p class="text-sm font-semibold truncate">${escapeHtml(item.name)}</p>
@@ -2150,6 +2187,7 @@
         ${wishlistSelectMode ? '' : `
         <div class="flex gap-2 mt-3">
           <button data-id="${item.id}" class="convertBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:var(--sage); color:var(--ink);">🛒 已購買</button>
+          ${isFirst ? '' : `<button data-id="${item.id}" data-act="top" class="moveWishBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(15,27,45,0.08); color:var(--ink);">置頂</button>`}
           <button data-id="${item.id}" class="editWishBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(201,162,39,0.2); color:#8a6d10;">✏️ 編輯</button>
           <button data-id="${item.id}" class="delWishBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">刪除</button>
         </div>`}
@@ -2157,6 +2195,9 @@
       wrap.appendChild(card);
     });
 
+    wrap.querySelectorAll('.moveWishBtn').forEach(btn=>{
+      btn.addEventListener('click', ()=> moveWishlistItem(btn.dataset.id, btn.dataset.act));
+    });
     wrap.querySelectorAll('.convertBtn').forEach(btn=>{
       btn.addEventListener('click', ()=> convertWishlistItem(btn.dataset.id));
     });
