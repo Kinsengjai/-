@@ -129,10 +129,11 @@
 
   <!-- Tabs -->
   <nav class="px-5 pt-4">
-    <div class="grid grid-cols-3 gap-2 p-1 rounded-xl" style="background:rgba(244,239,227,0.06);">
+    <div class="grid grid-cols-4 gap-2 p-1 rounded-xl" style="background:rgba(244,239,227,0.06);">
       <button id="tabBtnAdd" class="tab-btn active font-display text-xs py-2.5 rounded-lg btn-press">＋ 新增</button>
       <button id="tabBtnOverview" class="tab-btn font-display text-xs py-2.5 rounded-lg btn-press">📅 總覽</button>
-      <button id="tabBtnWishlist" class="tab-btn font-display text-xs py-2.5 rounded-lg btn-press">🌟 願望清單</button>
+      <button id="tabBtnWishlist" class="tab-btn font-display text-xs py-2.5 rounded-lg btn-press">🌟 願望</button>
+      <button id="tabBtnWardrobe" class="tab-btn font-display text-xs py-2.5 rounded-lg btn-press">👕 衣櫃</button>
     </div>
   </nav>
 
@@ -163,6 +164,9 @@
 
         <label class="block text-xs font-medium mb-1 opacity-70">類別（可複選）</label>
         <div id="fCategoryPicker" class="flex flex-wrap gap-1.5 mb-3"></div>
+
+        <label class="block text-xs font-medium mb-1 opacity-70">購買來源</label>
+        <div id="fOriginPicker" class="flex gap-2 mb-3"></div>
 
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div>
@@ -321,6 +325,21 @@
           </div>
         </div>
 
+        <div class="tag-card stitch-edge p-4 mb-5 rise-in">
+          <div class="tag-hole"></div>
+          <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">進口免稅額度</p>
+          <p id="importQuotaPeriod" class="text-[11px] opacity-60 mb-2"></p>
+          <div class="flex items-center justify-between">
+            <div id="importQuotaDots" class="flex items-center"></div>
+            <p id="importQuotaText" class="font-mono font-bold text-lg"></p>
+          </div>
+          <p id="importQuotaRemain" class="text-xs mt-1"></p>
+          <details class="mt-2">
+            <summary class="text-[11px] opacity-60 cursor-pointer">查看計入的進口品項</summary>
+            <div id="importQuotaList" class="mt-1.5 space-y-1 text-xs"></div>
+          </details>
+        </div>
+
         <input id="monthSearch" type="text" placeholder="搜尋全部紀錄的品項…"
           class="w-full mb-3 px-3 py-2 rounded-lg text-sm" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
 
@@ -381,6 +400,12 @@
           <p id="yearCompare" class="hidden text-xs mt-2 pt-2" style="border-top:1px solid rgba(15,27,45,0.1);"></p>
         </div>
 
+        <div class="tag-card stitch-edge p-4 mb-5 rise-in">
+          <div class="tag-hole"></div>
+          <p class="font-display text-xs tracking-widest mb-2" style="color:var(--rust);">進口免稅額度（每半年 6 次）</p>
+          <div id="yearImportQuota" class="space-y-3"></div>
+        </div>
+
         <div class="mb-5">
           <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">消費趨勢</p>
           <div id="yearTrendChart" class="rounded-lg p-3" style="background:rgba(244,239,227,0.04);"></div>
@@ -417,6 +442,9 @@
         <label class="block text-xs font-medium mb-1 opacity-70">類別（可複選）</label>
         <div id="wCategoryPicker" class="flex flex-wrap gap-1.5 mb-3"></div>
 
+        <label class="block text-xs font-medium mb-1 opacity-70">購買來源</label>
+        <div id="wOriginPicker" class="flex gap-2 mb-3"></div>
+
         <div class="grid grid-cols-2 gap-3 mb-4">
           <div>
             <label class="block text-xs font-medium mb-1 opacity-70">預估金額（選填）</label>
@@ -452,6 +480,43 @@
       </div>
     </section>
 
+    <!-- ============ TAB 4: My Wardrobe（我的衣櫃） ============ -->
+    <section id="panelWardrobe" class="hidden">
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <button id="wardrobeAddBtn" type="button" class="btn-press py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--thread); color:var(--ink);">＋ 加入單品</button>
+        <button id="wardrobeImportBtn" type="button" class="btn-press py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(244,239,227,0.08); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">📥 從消費紀錄匯入</button>
+      </div>
+
+      <details class="mb-4 rounded-lg" style="background:rgba(244,239,227,0.04);">
+        <summary class="px-4 py-3 text-xs font-display tracking-widest cursor-pointer" style="color:rgba(244,239,227,0.6);">衣櫃統計 <span id="wardrobeCount"></span></summary>
+        <div id="wardrobeStats" class="px-4 pb-4 space-y-4"></div>
+      </details>
+
+      <div class="flex gap-2 mb-2">
+        <input id="wardrobeSearch" type="text" placeholder="搜尋品名或品牌…"
+          class="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
+        <select id="wardrobeCategoryFilter" class="px-2 py-2 rounded-lg text-xs" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
+          <option value="">全部類別</option>
+        </select>
+        <select id="wardrobeColorFilter" class="px-2 py-2 rounded-lg text-xs" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
+          <option value="">全部色系</option>
+        </select>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 mb-2">
+        <button id="wardrobeUntaggedToggle" type="button" class="text-[11px] underline" style="color:rgba(244,239,227,0.5);">只看未標記色系／材質</button>
+        <button id="wardrobeSelectModeToggle" type="button" class="text-[11px] underline" style="color:var(--thread-soft);">批次標記</button>
+      </div>
+      <div id="wardrobeBulkRow" class="hidden flex gap-2 mb-3">
+        <button id="wardrobeSelectAllBtn" type="button" class="btn-press px-3 py-2 rounded-lg text-xs font-display" style="background:rgba(244,239,227,0.1); color:var(--paper);">全選目前結果</button>
+        <button id="wardrobeBulkApplyBtn" type="button" class="btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:var(--sage); color:var(--ink);">套用標記到已選（<span id="wardrobeSelectedCount">0</span>）</button>
+      </div>
+
+      <div id="wardrobeList" class="space-y-2"></div>
+      <p id="wardrobeEmpty" class="text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">衣櫃還是空的 👕<br><span class="text-xs">可以手動加入，或從消費紀錄一次匯入</span></p>
+      <p id="wardrobeNoMatch" class="hidden text-center text-sm py-10" style="color:rgba(244,239,227,0.35);">沒有符合的單品</p>
+    </section>
+
   </main>
 </div>
 
@@ -460,7 +525,7 @@
 
 <!-- Detail Modal -->
 <div id="detailModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background:rgba(0,0,0,0.6);">
-  <div id="detailModalContent" class="tag-card stitch-edge p-5 w-full max-w-sm rise-in"></div>
+  <div id="detailModalContent" class="tag-card stitch-edge p-5 w-full max-w-sm rise-in" style="max-height:88vh; overflow-y:auto;"></div>
 </div>
 
 <script>
@@ -543,15 +608,19 @@
     document.getElementById('panelAdd').classList.toggle('hidden', tab !== 'add');
     document.getElementById('panelOverview').classList.toggle('hidden', tab !== 'overview');
     document.getElementById('panelWishlist').classList.toggle('hidden', tab !== 'wishlist');
+    document.getElementById('panelWardrobe').classList.toggle('hidden', tab !== 'wardrobe');
     document.getElementById('tabBtnAdd').classList.toggle('active', tab === 'add');
     document.getElementById('tabBtnOverview').classList.toggle('active', tab === 'overview');
     document.getElementById('tabBtnWishlist').classList.toggle('active', tab === 'wishlist');
+    document.getElementById('tabBtnWardrobe').classList.toggle('active', tab === 'wardrobe');
     if(tab === 'overview') renderMonth();
     if(tab === 'wishlist') renderWishlist();
+    if(tab === 'wardrobe') renderWardrobe();
   }
   document.getElementById('tabBtnAdd').addEventListener('click', ()=>tabSwitch('add'));
   document.getElementById('tabBtnOverview').addEventListener('click', ()=>tabSwitch('overview'));
   document.getElementById('tabBtnWishlist').addEventListener('click', ()=>tabSwitch('wishlist'));
+  document.getElementById('tabBtnWardrobe').addEventListener('click', ()=>tabSwitch('wardrobe'));
   document.getElementById('addPageSummary').addEventListener('click', ()=>tabSwitch('overview'));
 
   // ---------- Add form ----------
@@ -600,6 +669,59 @@
       });
     });
     paint();
+  }
+
+  // ---------- 進口／本地 標籤 ----------
+  // origin 欄位：'import'（進口）或 'local'（本地）；舊資料沒有這個欄位時一律視為本地
+  function recOrigin(r){
+    return r.origin === 'import' ? 'import' : 'local';
+  }
+  function originLabel(o){
+    return o === 'import' ? '進口' : '本地';
+  }
+  // 進口／本地 單選切換：state 是 { value: 'local' | 'import' }，會直接被修改
+  function renderOriginPicker(containerId, state){
+    const container = document.getElementById(containerId);
+    container.innerHTML = ['local', 'import'].map(o =>
+      `<button type="button" class="originChip btn-press flex-1 py-2 rounded-lg text-sm" data-origin="${o}">${o === 'import' ? '🌏 進口' : '🏠 本地'}</button>`
+    ).join('');
+    function paint(){
+      container.querySelectorAll('.originChip').forEach(btn => {
+        const active = state.value === btn.dataset.origin;
+        btn.style.background = active ? 'var(--thread)' : 'rgba(15,27,45,0.06)';
+        btn.style.color = active ? 'var(--ink)' : 'rgba(15,27,45,0.65)';
+        btn.style.fontWeight = active ? '600' : '400';
+      });
+    }
+    container.querySelectorAll('.originChip').forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        state.value = btn.dataset.origin;
+        paint();
+      });
+    });
+    paint();
+  }
+
+  // 進口免稅額度：每半年 6 次（1～6 月、7～12 月），一筆進口紀錄以「購買日期」算 1 次
+  const IMPORT_QUOTA = 6;
+  function halfOfMonth(monthIdx){ return monthIdx < 6 ? 1 : 2; } // monthIdx: 0-11
+  function importRecordsInHalf(year, half){
+    return records.filter(r => {
+      if(recOrigin(r) !== 'import') return false;
+      const y = parseInt(r.date.slice(0, 4));
+      const m = parseInt(r.date.slice(5, 7)) - 1;
+      return y === year && halfOfMonth(m) === half;
+    });
+  }
+  function halfLabel(year, half){
+    return `${year} ${half === 1 ? '上半年（1–6月）' : '下半年（7–12月）'}`;
+  }
+  function quotaDotsHtml(used){
+    let html = '';
+    for(let i = 0; i < IMPORT_QUOTA; i++){
+      html += `<span style="display:inline-block;width:14px;height:14px;border-radius:999px;margin-right:5px;${i < used ? 'background:var(--thread);' : 'border:1.5px solid rgba(15,27,45,0.25);'}"></span>`;
+    }
+    return html;
   }
 
   // ---------- 付款狀態（已繳／未繳） ----------
@@ -669,6 +791,8 @@
 
   let fSelectedCategories = ['其他'];
   renderTagPicker('fCategoryPicker', fSelectedCategories);
+  const fOrigin = { value: 'local' };
+  renderOriginPicker('fOriginPicker', fOrigin);
 
   // default date = today
   fDate.value = new Date().toISOString().slice(0,10);
@@ -701,6 +825,7 @@
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       name: fName.value.trim(),
       categories: fSelectedCategories.length ? [...fSelectedCategories] : ['其他'],
+      origin: fOrigin.value,
       amount: parseFloat(fAmount.value) || 0,
       date: fDate.value,
       installments: Math.max(parseInt(fInstallments.value) || 1, 1),
@@ -718,6 +843,8 @@
     fName.value = '';
     fSelectedCategories = ['其他'];
     renderTagPicker('fCategoryPicker', fSelectedCategories);
+    fOrigin.value = 'local';
+    renderOriginPicker('fOriginPicker', fOrigin);
     fAmount.value = '';
     fInstallments.value = 1;
     fRate.value = 0;
@@ -808,7 +935,7 @@
       div.style.background = 'rgba(244,239,227,0.06)';
       div.innerHTML = `
         <div class="min-w-0 pr-3 flex-1">
-          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)} <span class="text-[10px] font-mono opacity-40">[${escapeHtml(recCategoryLabel(r))}]</span>${r.note ? ' 📝' : ''}</p>
+          <p class="text-sm font-medium truncate" style="color:var(--paper);">${escapeHtml(r.name)} <span class="text-[10px] font-mono opacity-40">[${escapeHtml(recCategoryLabel(r))}]</span>${recOrigin(r) === 'import' ? ' 🌏' : ''}${r.note ? ' 📝' : ''}</p>
           <p class="text-[11px] font-mono mt-0.5" style="color:rgba(244,239,227,0.45);">
             ${r.date} ・ ${detail}
           </p>
@@ -981,6 +1108,7 @@
     document.getElementById('monthPicker').value = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
     document.getElementById('remainingBalance').textContent = fmtMoney(computeRemainingBalance());
     updateAddPageSummary();
+    renderImportQuota();
 
     const items = [];
     records.forEach(r => {
@@ -1049,7 +1177,7 @@
             ${monthSelectMode === 'pay' ? `<input type="checkbox" class="selChkPay shrink-0 mt-0.5 w-4 h-4" data-key="${payKey}" ${monthPaySelectedKeys.has(payKey) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
               <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}${r.note ? ' 📝' : ''}</p>
-              <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategoryLabel(r))}</p>
+              <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategoryLabel(r))}${recOrigin(r) === 'import' ? ' ・ 🌏進口' : ''}</p>
             </div>
           </div>
           ${inSelectMode ? '' : `
@@ -1135,6 +1263,45 @@
     });
   }
 
+  // 月檢視：顯示「目前瀏覽月份」所屬半年的進口免稅額度使用狀況
+  function renderImportQuota(){
+    const half = halfOfMonth(viewMonth);
+    const used = importRecordsInHalf(viewYear, half);
+    const count = used.length;
+    document.getElementById('importQuotaPeriod').textContent = halfLabel(viewYear, half);
+    document.getElementById('importQuotaDots').innerHTML = quotaDotsHtml(Math.min(count, IMPORT_QUOTA));
+    document.getElementById('importQuotaText').textContent = `${count} / ${IMPORT_QUOTA} 次`;
+    const remainEl = document.getElementById('importQuotaRemain');
+    if(count > IMPORT_QUOTA){
+      remainEl.textContent = `已超過額度 ${count - IMPORT_QUOTA} 次`;
+      remainEl.style.color = 'var(--rust)';
+    }else{
+      remainEl.textContent = count === IMPORT_QUOTA ? '額度已用完' : `剩餘 ${IMPORT_QUOTA - count} 次`;
+      remainEl.style.color = count === IMPORT_QUOTA ? 'var(--rust)' : 'var(--sage)';
+    }
+    const sorted = [...used].sort((a, b) => a.date.localeCompare(b.date));
+    document.getElementById('importQuotaList').innerHTML = sorted.length
+      ? sorted.map(r => `<div class="flex justify-between gap-2"><span class="truncate">${escapeHtml(r.name)}</span><span class="font-mono opacity-60 shrink-0">${r.date}</span></div>`).join('')
+      : '<p class="opacity-50">這個期間還沒有進口品項</p>';
+  }
+
+  // 年檢視：同時顯示上半年與下半年
+  function renderYearImportQuota(){
+    document.getElementById('yearImportQuota').innerHTML = [1, 2].map(half => {
+      const count = importRecordsInHalf(viewYearOnly, half).length;
+      const over = count > IMPORT_QUOTA;
+      return `
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs opacity-70">${halfLabel(viewYearOnly, half)}</span>
+            <span class="font-mono font-bold text-sm" style="${over ? 'color:var(--rust);' : ''}">${count} / ${IMPORT_QUOTA} 次</span>
+          </div>
+          <div class="flex items-center">${quotaDotsHtml(Math.min(count, IMPORT_QUOTA))}</div>
+          ${over ? `<p class="text-[11px] mt-1" style="color:var(--rust);">已超過額度 ${count - IMPORT_QUOTA} 次</p>` : ''}
+        </div>`;
+    }).join('');
+  }
+
   // 從「全部紀錄」搜尋（不受目前瀏覽月份限制），分期品項只顯示一筆加總後的總金額
   function renderMonthSearchResults(query){
     const matched = records.filter(r => r.name.toLowerCase().includes(query));
@@ -1159,7 +1326,7 @@
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="text-sm font-semibold truncate">${escapeHtml(r.name)}${r.note ? ' 📝' : ''}</p>
-            <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategoryLabel(r))}</p>
+            <p class="text-[11px] font-mono opacity-50 mt-0.5">${r.date} ・ ${escapeHtml(recCategoryLabel(r))}${recOrigin(r) === 'import' ? ' ・ 🌏進口' : ''}</p>
           </div>
         </div>
         <div class="flex items-end justify-between mt-3">
@@ -1300,6 +1467,7 @@
     document.getElementById('yearTrendChart').innerHTML = buildTrendSVG(monthlyTotals, prevYearData.monthlyTotals);
     document.getElementById('yearTrendLegend').classList.toggle('hidden', !prevYearData.monthlyTotals.some(v => v > 0));
 
+    renderYearImportQuota();
     document.getElementById('yearTotal').textContent = fmtMoney(yearTotal);
     document.getElementById('yearCount').textContent = `共 ${itemCount} 筆`;
 
@@ -1410,7 +1578,7 @@
     return s;
   }
   function exportCSV(){
-    const header = ['品項名稱','類別','購買日期','期別','應繳月份','金額','已繳','備註'];
+    const header = ['品項名稱','類別','購買日期','期別','應繳月份','金額','已繳','備註','來源'];
     const rows = [header];
     records.forEach(r => {
       for(let p = 1; p <= r.installments; p++){
@@ -1425,6 +1593,7 @@
           perPeriodAmount(r, p),
           isPeriodPaid(r, p) ? '是' : '否',
           r.note || '',
+          originLabel(recOrigin(r)),
         ]);
       }
     });
@@ -1442,7 +1611,7 @@
   }
 
   function openBackupPanel(){
-    const exportData = JSON.stringify({ records, wishlist, exportedAt: new Date().toISOString() });
+    const exportData = JSON.stringify({ records, wishlist, wardrobe, exportedAt: new Date().toISOString() });
 
     detailModalContent.innerHTML = `
       <div class="tag-hole"></div>
@@ -1512,15 +1681,21 @@
         msg.classList.remove('hidden');
         return;
       }
-      if(!confirm(`將還原 ${parsed.records.length} 筆消費紀錄與 ${Array.isArray(parsed.wishlist) ? parsed.wishlist.length : 0} 筆願望清單，會覆蓋這裡目前的資料，確定要繼續嗎？`)) return;
+      if(!confirm(`將還原 ${parsed.records.length} 筆消費紀錄與 ${Array.isArray(parsed.wishlist) ? parsed.wishlist.length : 0} 筆願望清單${Array.isArray(parsed.wardrobe) ? `與 ${parsed.wardrobe.length} 件衣櫃單品` : ''}，會覆蓋這裡目前的資料，確定要繼續嗎？`)) return;
 
       records = parsed.records;
       wishlist = Array.isArray(parsed.wishlist) ? parsed.wishlist : [];
       saveRecords(records);
       saveWishlist(wishlist);
+      // 舊版備份沒有衣櫃資料時，保留這裡目前的衣櫃，不要清掉
+      if(Array.isArray(parsed.wardrobe)){
+        wardrobe = parsed.wardrobe;
+        saveWardrobe(wardrobe);
+      }
       renderAllRecords();
       renderMonth();
       renderWishlist();
+      renderWardrobe();
       closeDetail();
     });
   }
@@ -1575,6 +1750,7 @@
 
       <div class="space-y-2.5 text-sm">
         <div class="flex justify-between"><span class="opacity-60">類別</span><span class="font-mono">${escapeHtml(recCategoryLabel(r))}</span></div>
+        <div class="flex justify-between"><span class="opacity-60">購買來源</span><span class="font-mono">${recOrigin(r) === 'import' ? '🌏 進口' : '本地'}</span></div>
         <div class="flex justify-between"><span class="opacity-60">購買日期</span><span class="font-mono">${r.date}</span></div>
         ${!isOneTime && r.firstPaymentDate && r.firstPaymentDate !== r.date ? `<div class="flex justify-between"><span class="opacity-60">首期付款日期</span><span class="font-mono">${r.firstPaymentDate}</span></div>` : ''}
         <div class="flex justify-between"><span class="opacity-60">分期方式</span><span class="font-mono">${isOneTime ? '一次付清' : `${r.installments} 期`}</span></div>
@@ -1626,6 +1802,7 @@
     let editMode = r.customAmounts ? 'custom' : 'formula';
     let editInstallments = r.installments;
     let editSelectedCategories = [...recCategories(r)];
+    const editOrigin = { value: recOrigin(r) };
     let editCustomAmounts = r.customAmounts
       ? [...r.customAmounts]
       : Array.from({length: r.installments}, (_, i) => perPeriodAmount(r, i+1));
@@ -1643,6 +1820,10 @@
           <div>
             <label class="block text-xs opacity-60 mb-1">類別（可複選）</label>
             <div id="editCategoryPicker" class="flex flex-wrap gap-1.5"></div>
+          </div>
+          <div>
+            <label class="block text-xs opacity-60 mb-1">購買來源（進口／本地）</label>
+            <div id="editOriginPicker" class="flex gap-2"></div>
           </div>
           <div>
             <label class="block text-xs opacity-60 mb-1">購買日期</label>
@@ -1721,6 +1902,7 @@
 
       document.getElementById('editCancelBtn').addEventListener('click', ()=> openDetail(r, currentPeriod));
       renderTagPicker('editCategoryPicker', editSelectedCategories);
+      renderOriginPicker('editOriginPicker', editOrigin);
       document.getElementById('editSaveBtn').addEventListener('click', ()=>{
         const name = document.getElementById('editName').value.trim();
         const categories = editSelectedCategories.length ? [...editSelectedCategories] : ['其他'];
@@ -1735,7 +1917,7 @@
         if(editMode === 'custom'){
           records[idx] = {
             ...records[idx],
-            name, categories, date,
+            name, categories, origin: editOrigin.value, date,
             installments: editInstallments,
             amount: editCustomAmounts.reduce((s,a) => s + a, 0),
             rate: 0,
@@ -1745,7 +1927,7 @@
           const inst = Math.max(parseInt(document.getElementById('editInstallments').value) || 1, 1);
           const amt = parseFloat(document.getElementById('editAmount').value) || 0;
           const rate = parseFloat(document.getElementById('editRate').value) || 0;
-          const updated = { ...records[idx], name, categories, date, installments: inst, amount: amt, rate };
+          const updated = { ...records[idx], name, categories, origin: editOrigin.value, date, installments: inst, amount: amt, rate };
           delete updated.customAmounts;
           records[idx] = updated;
         }
@@ -1985,6 +2167,8 @@
 
   let wSelectedCategories = ['其他'];
   renderTagPicker('wCategoryPicker', wSelectedCategories);
+  const wOrigin = { value: 'local' };
+  renderOriginPicker('wOriginPicker', wOrigin);
 
   document.getElementById('wishlistForm').addEventListener('submit', (e)=>{
     e.preventDefault();
@@ -1992,6 +2176,7 @@
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       name: wName.value.trim(),
       categories: wSelectedCategories.length ? [...wSelectedCategories] : ['其他'],
+      origin: wOrigin.value,
       price: wPrice.value ? parseFloat(wPrice.value) : null,
       note: wNote.value.trim(),
       addedDate: new Date().toISOString().slice(0,10),
@@ -2005,6 +2190,8 @@
     wName.value = '';
     wSelectedCategories = ['其他'];
     renderTagPicker('wCategoryPicker', wSelectedCategories);
+    wOrigin.value = 'local';
+    renderOriginPicker('wOriginPicker', wOrigin);
     wPrice.value = '';
     wNote.value = '';
 
@@ -2035,6 +2222,8 @@
     fName.value = item.name;
     fSelectedCategories = Array.isArray(item.categories) && item.categories.length ? [...item.categories] : [item.category || '其他'];
     renderTagPicker('fCategoryPicker', fSelectedCategories);
+    fOrigin.value = item.origin === 'import' ? 'import' : 'local';
+    renderOriginPicker('fOriginPicker', fOrigin);
     fAmount.value = item.price || '';
     fDate.value = new Date().toISOString().slice(0,10);
     updatePreview();
@@ -2051,6 +2240,7 @@
 
     // wishlist 項目的分類陣列，相容舊資料的單一 category 欄位
     let editWishCategories = Array.isArray(item.categories) && item.categories.length ? [...item.categories] : [item.category || '其他'];
+    const editWishOrigin = { value: item.origin === 'import' ? 'import' : 'local' };
 
     detailModalContent.innerHTML = `
       <div class="tag-hole"></div>
@@ -2064,6 +2254,10 @@
         <div>
           <label class="block text-xs opacity-60 mb-1">類別（可複選）</label>
           <div id="editWishCategoryPicker" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">購買來源</label>
+          <div id="editWishOriginPicker" class="flex gap-2"></div>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -2084,6 +2278,7 @@
     `;
     detailModal.classList.remove('hidden');
     renderTagPicker('editWishCategoryPicker', editWishCategories);
+    renderOriginPicker('editWishOriginPicker', editWishOrigin);
 
     document.getElementById('editWishCancelBtn').addEventListener('click', closeDetail);
     document.getElementById('editWishSaveBtn').addEventListener('click', ()=>{
@@ -2098,6 +2293,7 @@
         ...wishlist[idx],
         name,
         categories: editWishCategories.length ? [...editWishCategories] : ['其他'],
+        origin: editWishOrigin.value,
         price: priceVal ? parseFloat(priceVal) : null,
         note,
       };
@@ -2177,7 +2373,7 @@
             ${wishlistSelectMode ? `<input type="checkbox" class="selChkWish shrink-0 mt-0.5 w-4 h-4" data-id="${item.id}" ${wishlistSelectedIds.has(item.id) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
               <p class="text-sm font-semibold truncate">${escapeHtml(item.name)}</p>
-              <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(wishlistCategoryLabel(item))}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
+              <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(wishlistCategoryLabel(item))}${item.origin === 'import' ? ' ・ 🌏進口' : ''}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
               ${item.note ? (isUrl(item.note)
                 ? `<a href="${escapeHtml(item.note)}" target="_blank" rel="noopener" class="text-xs underline mt-1 inline-block" style="color:var(--rust);">🔗 查看連結</a>`
                 : `<p class="text-xs opacity-60 mt-1">${escapeHtml(item.note)}</p>`) : ''}
@@ -2228,11 +2424,472 @@
     }
   }
 
+  // ---------- My Wardrobe（我的衣櫃） ----------
+  const WARDROBE_STORAGE_KEY = 'wardrobeLedgerWardrobe';
+  function loadWardrobe(){
+    try{ return JSON.parse(localStorage.getItem(WARDROBE_STORAGE_KEY)) || []; }catch(e){ return []; }
+  }
+  function saveWardrobe(list){
+    localStorage.setItem(WARDROBE_STORAGE_KEY, JSON.stringify(list));
+  }
+  let wardrobe = loadWardrobe();
+
+  // 單品屬性（之後做願望清單評分時，就是拿這些維度去比對）
+  const COLOR_FAMILIES = [
+    { name:'黑', hex:'#1a1a1a' }, { name:'白', hex:'#f7f7f4' }, { name:'灰', hex:'#9aa0a6' },
+    { name:'米/卡其', hex:'#d6c3a1' }, { name:'棕', hex:'#8b5e3c' }, { name:'藍', hex:'#3b5b92' },
+    { name:'綠', hex:'#5f7050' }, { name:'紅/酒紅', hex:'#a23b3b' }, { name:'粉', hex:'#e8b4c0' },
+    { name:'黃/橘', hex:'#e0a030' }, { name:'紫', hex:'#7a5a9a' },
+    { name:'多色/花紋', hex:'conic-gradient(#a23b3b,#e0a030,#5f7050,#3b5b92,#a23b3b)' },
+  ];
+  const MATERIAL_OPTIONS = ['棉','麻','羊毛','羊絨','絲','聚酯纖維','尼龍','人造絲','丹寧','皮革','防水機能布','刷毛/搖粒絨','其他'];
+  const SEASON_OPTIONS = ['春','夏','秋','冬'];
+  const STYLE_OPTIONS = ['街頭','機能戶外','運動跑步','休閒','正式','工裝復古'];
+  const toOptions = arr => arr.map(v => ({ value: v, label: v }));
+  const COLOR_OPTIONS = COLOR_FAMILIES.map(c => ({ value: c.name, label: c.name, hex: c.hex }));
+
+  function colorDotHtml(name, size){
+    const c = COLOR_FAMILIES.find(x => x.name === name);
+    const hex = c ? c.hex : '#999';
+    const sz = size || 10;
+    return `<span style="display:inline-block;width:${sz}px;height:${sz}px;border-radius:999px;border:1px solid rgba(128,128,128,0.5);background:${hex};flex-shrink:0;"></span>`;
+  }
+
+  // 通用多選標籤：options 是 [{value,label,hex?}]，selectedArr 會被直接修改
+  function renderChipPicker(containerId, options, selectedArr){
+    const container = document.getElementById(containerId);
+    container.innerHTML = options.map(o =>
+      `<button type="button" class="chip btn-press px-2.5 py-1.5 rounded-full text-xs inline-flex items-center gap-1.5" data-val="${escapeHtml(o.value)}">${o.hex ? colorDotHtml(o.value, 11) : ''}${escapeHtml(o.label)}</button>`
+    ).join('');
+    function paint(){
+      container.querySelectorAll('.chip').forEach(btn => {
+        const active = selectedArr.includes(btn.dataset.val);
+        btn.style.background = active ? 'var(--thread)' : 'rgba(15,27,45,0.06)';
+        btn.style.color = active ? 'var(--ink)' : 'rgba(15,27,45,0.65)';
+        btn.style.fontWeight = active ? '600' : '400';
+      });
+    }
+    container.querySelectorAll('.chip').forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        const v = btn.dataset.val;
+        const i = selectedArr.indexOf(v);
+        if(i === -1) selectedArr.push(v); else selectedArr.splice(i, 1);
+        paint();
+      });
+    });
+    paint();
+  }
+
+  function wardrobeItemUntagged(it){
+    return !(it.colors && it.colors.length) || !(it.materials && it.materials.length);
+  }
+
+  // 加入／編輯單品（共用同一個表單）
+  function openWardrobeForm(itemId){
+    const existing = itemId ? wardrobe.find(w => w.id === itemId) : null;
+    const sel = {
+      categories: existing && existing.categories && existing.categories.length ? [...existing.categories] : ['其他'],
+      colors: existing ? [...(existing.colors || [])] : [],
+      materials: existing ? [...(existing.materials || [])] : [],
+      seasons: existing ? [...(existing.seasons || [])] : [],
+      styles: existing ? [...(existing.styles || [])] : [],
+    };
+    const origin = { value: existing && existing.origin === 'import' ? 'import' : 'local' };
+    const inputStyle = 'background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);';
+
+    detailModalContent.innerHTML = `
+      <div class="tag-hole"></div>
+      <p class="font-display text-xs tracking-widest mb-3" style="color:var(--rust);">${existing ? '編輯單品' : '加入單品到衣櫃'}</p>
+      <div class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs opacity-60 mb-1">品名</label>
+          <input id="wdName" type="text" value="${escapeHtml(existing ? existing.name : '')}" placeholder="例如：DAIWA 防風外套" class="w-full px-3 py-2 rounded-lg text-sm" style="${inputStyle}">
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">品牌（選填）</label>
+          <input id="wdBrand" type="text" value="${escapeHtml(existing ? (existing.brand || '') : '')}" placeholder="例如：DAIWA" class="w-full px-3 py-2 rounded-lg text-sm" style="${inputStyle}">
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">類別（可複選）</label>
+          <div id="wdCategoryPicker" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">購買來源</label>
+          <div id="wdOriginPicker" class="flex gap-2"></div>
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">色系（可複選）</label>
+          <div id="wdColorPicker" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">材質（可複選）</label>
+          <div id="wdMaterialPicker" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">適穿季節</label>
+          <div id="wdSeasonPicker" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">風格</label>
+          <div id="wdStylePicker" class="flex flex-wrap gap-1.5"></div>
+        </div>
+        <div>
+          <label class="block text-xs opacity-60 mb-1">備註（選填）</label>
+          <input id="wdNote" type="text" value="${escapeHtml(existing ? (existing.note || '') : '')}" placeholder="例如：尺寸 M、常穿" class="w-full px-3 py-2 rounded-lg text-sm" style="${inputStyle}">
+        </div>
+      </div>
+      <div class="flex gap-2 mt-5">
+        <button id="wdSaveBtn" type="button" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--sage); color:var(--ink);">儲存</button>
+        <button id="wdCancelBtn" type="button" class="btn-press px-4 py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(15,27,45,0.08); color:var(--ink);">取消</button>
+      </div>
+    `;
+    detailModal.classList.remove('hidden');
+    renderTagPicker('wdCategoryPicker', sel.categories);
+    renderOriginPicker('wdOriginPicker', origin);
+    renderChipPicker('wdColorPicker', COLOR_OPTIONS, sel.colors);
+    renderChipPicker('wdMaterialPicker', toOptions(MATERIAL_OPTIONS), sel.materials);
+    renderChipPicker('wdSeasonPicker', toOptions(SEASON_OPTIONS), sel.seasons);
+    renderChipPicker('wdStylePicker', toOptions(STYLE_OPTIONS), sel.styles);
+
+    document.getElementById('wdCancelBtn').addEventListener('click', closeDetail);
+    document.getElementById('wdSaveBtn').addEventListener('click', ()=>{
+      const name = document.getElementById('wdName').value.trim();
+      if(!name){ alert('請輸入品名'); return; }
+      const data = {
+        name,
+        brand: document.getElementById('wdBrand').value.trim(),
+        categories: sel.categories.length ? [...sel.categories] : ['其他'],
+        origin: origin.value,
+        colors: [...sel.colors],
+        materials: [...sel.materials],
+        seasons: [...sel.seasons],
+        styles: [...sel.styles],
+        note: document.getElementById('wdNote').value.trim(),
+      };
+      if(existing){
+        const idx = wardrobe.findIndex(w => w.id === existing.id);
+        if(idx !== -1) wardrobe[idx] = { ...wardrobe[idx], ...data };
+        showToast(`✓ 已更新「${name}」`);
+      }else{
+        wardrobe.push({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          ...data,
+          addedDate: new Date().toISOString().slice(0, 10),
+        });
+        showToast(`✓ 已加入衣櫃「${name}」`);
+      }
+      saveWardrobe(wardrobe);
+      renderWardrobe();
+      closeDetail();
+    });
+  }
+
+  function deleteWardrobeItem(id){
+    const it = wardrobe.find(w => w.id === id);
+    if(!it) return;
+    if(!confirm(`確定要把「${it.name}」從衣櫃移除嗎？（不會影響消費紀錄）`)) return;
+    wardrobe = wardrobe.filter(w => w.id !== id);
+    wardrobeSelectedIds.delete(id);
+    saveWardrobe(wardrobe);
+    renderWardrobe();
+  }
+
+  // 從消費紀錄匯入：列出還沒加入衣櫃的紀錄，勾選後一次加入（運費、綜合未拆分不列出）
+  function openWardrobeImport(){
+    const linked = new Set(wardrobe.map(w => w.linkedRecordId).filter(Boolean));
+    const candidates = records
+      .filter(r => !linked.has(r.id) && !recCategories(r).every(c => c === '運費' || c === '綜合(未拆分)'))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const picked = new Set();
+
+    detailModalContent.innerHTML = `
+      <div class="tag-hole"></div>
+      <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">從消費紀錄匯入衣櫃</p>
+      <p class="text-xs opacity-60 mb-3 leading-relaxed">勾選已經擁有的單品，會帶入品名、類別與進口/本地，色系和材質可以之後再批次標記。已加入過的紀錄不會重複列出。</p>
+      ${candidates.length === 0 ? '<p class="text-sm opacity-60 py-4 text-center">沒有可匯入的紀錄（都已加入衣櫃了）</p>' : `
+      <input id="wdImpSearch" type="text" placeholder="搜尋品名…" class="w-full mb-2 px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+      <div class="flex justify-between items-center mb-1">
+        <button id="wdImpSelectAll" type="button" class="text-xs underline" style="color:rgba(15,27,45,0.6);">全選／取消全選（目前列出的）</button>
+        <span class="text-xs opacity-60">已選 <span id="wdImpCount">0</span> 筆</span>
+      </div>
+      <div id="wdImpList" style="max-height:16rem; overflow-y:auto;"></div>`}
+      <div class="flex gap-2 mt-4">
+        ${candidates.length === 0 ? '' : '<button id="wdImpBtn" type="button" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--sage); color:var(--ink);">加入衣櫃</button>'}
+        <button id="wdImpCancel" type="button" class="btn-press ${candidates.length === 0 ? 'flex-1' : 'px-4'} py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(15,27,45,0.08); color:var(--ink);">${candidates.length === 0 ? '關閉' : '取消'}</button>
+      </div>
+    `;
+    detailModal.classList.remove('hidden');
+    document.getElementById('wdImpCancel').addEventListener('click', closeDetail);
+    if(candidates.length === 0) return;
+
+    const listEl = document.getElementById('wdImpList');
+    const searchEl = document.getElementById('wdImpSearch');
+    const countEl = document.getElementById('wdImpCount');
+    let visible = candidates;
+
+    function paintRows(){
+      const q = searchEl.value.trim().toLowerCase();
+      visible = candidates.filter(r => !q || r.name.toLowerCase().includes(q));
+      listEl.innerHTML = visible.length ? visible.map(r => `
+        <label class="flex items-center gap-2 py-1.5" style="border-bottom:1px solid rgba(15,27,45,0.08);">
+          <input type="checkbox" class="wdImpChk w-4 h-4 shrink-0" data-id="${r.id}" ${picked.has(r.id) ? 'checked' : ''}>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm truncate">${escapeHtml(r.name)}</span>
+            <span class="block text-[11px] font-mono opacity-50">${r.date} ・ ${escapeHtml(recCategoryLabel(r))}</span>
+          </span>
+        </label>`).join('') : '<p class="text-xs opacity-50 py-3 text-center">沒有符合的紀錄</p>';
+      listEl.querySelectorAll('.wdImpChk').forEach(chk => {
+        chk.addEventListener('change', ()=>{
+          if(chk.checked) picked.add(chk.dataset.id); else picked.delete(chk.dataset.id);
+          countEl.textContent = picked.size;
+        });
+      });
+      countEl.textContent = picked.size;
+    }
+    searchEl.addEventListener('input', paintRows);
+    document.getElementById('wdImpSelectAll').addEventListener('click', ()=>{
+      const allPicked = visible.length > 0 && visible.every(r => picked.has(r.id));
+      visible.forEach(r => { if(allPicked) picked.delete(r.id); else picked.add(r.id); });
+      paintRows();
+    });
+    paintRows();
+
+    document.getElementById('wdImpBtn').addEventListener('click', ()=>{
+      if(picked.size === 0){ alert('請先勾選要加入的紀錄'); return; }
+      const today = new Date().toISOString().slice(0, 10);
+      candidates.filter(r => picked.has(r.id)).forEach(r => {
+        wardrobe.push({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+          name: r.name,
+          brand: '',
+          categories: [...recCategories(r)],
+          origin: recOrigin(r),
+          colors: [], materials: [], seasons: [], styles: [],
+          note: '',
+          linkedRecordId: r.id,
+          acquiredDate: r.date,
+          addedDate: today,
+        });
+      });
+      saveWardrobe(wardrobe);
+      renderWardrobe();
+      closeDetail();
+      showToast(`✓ 已加入 ${picked.size} 件，可用「批次標記」補上色系／材質`);
+    });
+  }
+
+  // 批次標記：把選好的色系／材質／季節／風格「加到」已選單品上（不會移除原有標記）
+  function openWardrobeBulkTag(){
+    if(wardrobeSelectedIds.size === 0) return;
+    const sel = { colors: [], materials: [], seasons: [], styles: [] };
+    detailModalContent.innerHTML = `
+      <div class="tag-hole"></div>
+      <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">批次標記</p>
+      <p class="text-xs opacity-60 mb-3 leading-relaxed">會把下面選的標記加到已選的 ${wardrobeSelectedIds.size} 件單品上，原本的標記不會被移除。</p>
+      <div class="space-y-3 text-sm">
+        <div><label class="block text-xs opacity-60 mb-1">色系</label><div id="wbColorPicker" class="flex flex-wrap gap-1.5"></div></div>
+        <div><label class="block text-xs opacity-60 mb-1">材質</label><div id="wbMaterialPicker" class="flex flex-wrap gap-1.5"></div></div>
+        <div><label class="block text-xs opacity-60 mb-1">適穿季節</label><div id="wbSeasonPicker" class="flex flex-wrap gap-1.5"></div></div>
+        <div><label class="block text-xs opacity-60 mb-1">風格</label><div id="wbStylePicker" class="flex flex-wrap gap-1.5"></div></div>
+      </div>
+      <div class="flex gap-2 mt-5">
+        <button id="wbApplyBtn" type="button" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--sage); color:var(--ink);">套用</button>
+        <button id="wbCancelBtn" type="button" class="btn-press px-4 py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(15,27,45,0.08); color:var(--ink);">取消</button>
+      </div>
+    `;
+    detailModal.classList.remove('hidden');
+    renderChipPicker('wbColorPicker', COLOR_OPTIONS, sel.colors);
+    renderChipPicker('wbMaterialPicker', toOptions(MATERIAL_OPTIONS), sel.materials);
+    renderChipPicker('wbSeasonPicker', toOptions(SEASON_OPTIONS), sel.seasons);
+    renderChipPicker('wbStylePicker', toOptions(STYLE_OPTIONS), sel.styles);
+
+    document.getElementById('wbCancelBtn').addEventListener('click', closeDetail);
+    document.getElementById('wbApplyBtn').addEventListener('click', ()=>{
+      if(!sel.colors.length && !sel.materials.length && !sel.seasons.length && !sel.styles.length){
+        alert('請至少選一個要加上的標記');
+        return;
+      }
+      const n = wardrobeSelectedIds.size;
+      wardrobe.forEach(it => {
+        if(!wardrobeSelectedIds.has(it.id)) return;
+        ['colors', 'materials', 'seasons', 'styles'].forEach(k => {
+          const cur = Array.isArray(it[k]) ? it[k] : [];
+          it[k] = [...new Set([...cur, ...sel[k]])];
+        });
+      });
+      saveWardrobe(wardrobe);
+      wardrobeSelectMode = false;
+      wardrobeSelectedIds.clear();
+      renderWardrobe();
+      closeDetail();
+      showToast(`✓ 已套用到 ${n} 件單品`);
+    });
+  }
+
+  let wardrobeSelectMode = false;
+  let wardrobeSelectedIds = new Set();
+  let wardrobeUntaggedOnly = false;
+
+  function getWardrobeFiltered(){
+    const q = document.getElementById('wardrobeSearch').value.trim().toLowerCase();
+    const catF = document.getElementById('wardrobeCategoryFilter').value;
+    const colorF = document.getElementById('wardrobeColorFilter').value;
+    return [...wardrobe]
+      .sort((a, b) => (b.acquiredDate || b.addedDate || '').localeCompare(a.acquiredDate || a.addedDate || ''))
+      .filter(it => {
+        if(q && !(it.name.toLowerCase().includes(q) || (it.brand || '').toLowerCase().includes(q))) return false;
+        if(catF && !(it.categories || []).includes(catF)) return false;
+        if(colorF && !(it.colors || []).includes(colorF)) return false;
+        if(wardrobeUntaggedOnly && !wardrobeItemUntagged(it)) return false;
+        return true;
+      });
+  }
+
+  function renderWardrobeStats(){
+    const wrap = document.getElementById('wardrobeStats');
+    if(!wardrobe.length){
+      wrap.innerHTML = '<p class="text-xs" style="color:rgba(244,239,227,0.4);">還沒有單品</p>';
+      return;
+    }
+    function tally(getter){
+      const c = {};
+      wardrobe.forEach(it => (getter(it) || []).forEach(v => { c[v] = (c[v] || 0) + 1; }));
+      return Object.entries(c).sort((a, b) => b[1] - a[1]);
+    }
+    function section(title, entries, dotFn){
+      if(!entries.length) return '';
+      const max = entries[0][1];
+      return `<div>
+        <p class="text-[11px] tracking-widest mb-1.5" style="color:rgba(244,239,227,0.45);">${title}</p>
+        <div class="space-y-1.5">${entries.map(([name, n]) => `
+          <div>
+            <div class="flex justify-between text-xs mb-0.5">
+              <span class="flex items-center gap-1.5" style="color:rgba(244,239,227,0.8);">${dotFn ? dotFn(name) : ''}${escapeHtml(name)}</span>
+              <span class="font-mono" style="color:var(--paper);">${n}</span>
+            </div>
+            <div class="progress-track h-1.5"><div class="h-full" style="width:${Math.max(n / max * 100, 4)}%; background:var(--thread);"></div></div>
+          </div>`).join('')}</div>
+      </div>`;
+    }
+    const noColor = wardrobe.filter(it => !(it.colors && it.colors.length)).length;
+    const noMaterial = wardrobe.filter(it => !(it.materials && it.materials.length)).length;
+    wrap.innerHTML =
+      (noColor || noMaterial ? `<p class="text-[11px]" style="color:var(--thread-soft);">尚未標記：色系 ${noColor} 件・材質 ${noMaterial} 件</p>` : '') +
+      section('類別', tally(it => it.categories || [])) +
+      section('色系', tally(it => it.colors), name => colorDotHtml(name, 10)) +
+      section('材質', tally(it => it.materials)) +
+      section('適穿季節', tally(it => it.seasons)) +
+      section('風格', tally(it => it.styles));
+  }
+
+  function renderWardrobe(){
+    const wrap = document.getElementById('wardrobeList');
+    const empty = document.getElementById('wardrobeEmpty');
+    const noMatch = document.getElementById('wardrobeNoMatch');
+    wrap.innerHTML = '';
+
+    const filtered = getWardrobeFiltered();
+    document.getElementById('wardrobeCount').textContent = wardrobe.length ? `（${wardrobe.length} 件）` : '';
+    empty.classList.toggle('hidden', wardrobe.length > 0);
+    noMatch.classList.toggle('hidden', !(wardrobe.length > 0 && filtered.length === 0));
+
+    document.getElementById('wardrobeSelectModeToggle').textContent = wardrobeSelectMode ? '取消批次標記' : '批次標記';
+    document.getElementById('wardrobeBulkRow').classList.toggle('hidden', !wardrobeSelectMode);
+    document.getElementById('wardrobeSelectedCount').textContent = wardrobeSelectedIds.size;
+    const utBtn = document.getElementById('wardrobeUntaggedToggle');
+    utBtn.textContent = wardrobeUntaggedOnly ? '✓ 只看未標記色系／材質' : '只看未標記色系／材質';
+    utBtn.style.color = wardrobeUntaggedOnly ? 'var(--thread-soft)' : 'rgba(244,239,227,0.5)';
+
+    filtered.forEach(it => {
+      const untagged = wardrobeItemUntagged(it);
+      const card = document.createElement('div');
+      card.className = 'tag-card stitch-edge p-4 rise-in';
+      card.dataset.id = it.id;
+      card.innerHTML = `
+        <div class="tag-hole"></div>
+        <div class="flex items-start gap-2.5 pr-6">
+          ${wardrobeSelectMode ? `<input type="checkbox" class="selChkWd shrink-0 mt-0.5 w-4 h-4" data-id="${it.id}" ${wardrobeSelectedIds.has(it.id) ? 'checked' : ''}>` : ''}
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold truncate">${escapeHtml(it.name)}${it.brand ? ` <span class="text-[11px] font-mono opacity-50">${escapeHtml(it.brand)}</span>` : ''}</p>
+            <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml((it.categories || ['其他']).join('、'))}${it.origin === 'import' ? ' ・ 🌏進口' : ''}${(it.seasons && it.seasons.length) ? ' ・ ' + it.seasons.join('') : ''}</p>
+            ${(it.colors && it.colors.length) ? `<div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5">${it.colors.map(c => `<span class="inline-flex items-center gap-1 text-[11px]">${colorDotHtml(c, 10)}${escapeHtml(c)}</span>`).join('')}</div>` : ''}
+            ${(it.materials && it.materials.length) ? `<p class="text-[11px] mt-1 opacity-70">材質：${escapeHtml(it.materials.join('、'))}</p>` : ''}
+            ${(it.styles && it.styles.length) ? `<p class="text-[11px] mt-0.5 opacity-70">風格：${escapeHtml(it.styles.join('、'))}</p>` : ''}
+            ${it.note ? `<p class="text-xs opacity-60 mt-1">${escapeHtml(it.note)}</p>` : ''}
+            ${untagged ? `<p class="text-[11px] mt-1.5" style="color:var(--rust);">尚未標記${(it.colors && it.colors.length) ? '' : '色系'}${(it.colors && it.colors.length) || (it.materials && it.materials.length) ? '' : '、'}${(it.materials && it.materials.length) ? '' : '材質'}</p>` : ''}
+          </div>
+        </div>
+        ${wardrobeSelectMode ? '' : `
+        <div class="flex gap-2 mt-3">
+          <button data-id="${it.id}" class="editWdBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(201,162,39,0.2); color:#8a6d10;">✏️ 編輯</button>
+          <button data-id="${it.id}" class="delWdBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">移除</button>
+        </div>`}
+      `;
+      wrap.appendChild(card);
+    });
+
+    wrap.querySelectorAll('.editWdBtn').forEach(btn => btn.addEventListener('click', ()=> openWardrobeForm(btn.dataset.id)));
+    wrap.querySelectorAll('.delWdBtn').forEach(btn => btn.addEventListener('click', ()=> deleteWardrobeItem(btn.dataset.id)));
+    wrap.querySelectorAll('.selChkWd').forEach(chk => {
+      chk.addEventListener('click', e => e.stopPropagation());
+      chk.addEventListener('change', ()=>{
+        if(chk.checked) wardrobeSelectedIds.add(chk.dataset.id); else wardrobeSelectedIds.delete(chk.dataset.id);
+        document.getElementById('wardrobeSelectedCount').textContent = wardrobeSelectedIds.size;
+      });
+    });
+    if(wardrobeSelectMode){
+      wrap.querySelectorAll('.tag-card').forEach(card => {
+        card.addEventListener('click', ()=>{
+          const chk = card.querySelector('.selChkWd');
+          if(chk){ chk.checked = !chk.checked; chk.dispatchEvent(new Event('change')); }
+        });
+      });
+    }
+    renderWardrobeStats();
+  }
+
+  // 衣櫃頁的事件綁定與篩選選單
+  CATEGORIES.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat; opt.textContent = cat;
+    document.getElementById('wardrobeCategoryFilter').appendChild(opt);
+  });
+  COLOR_FAMILIES.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name; opt.textContent = c.name;
+    document.getElementById('wardrobeColorFilter').appendChild(opt);
+  });
+  document.getElementById('wardrobeSearch').addEventListener('input', renderWardrobe);
+  document.getElementById('wardrobeCategoryFilter').addEventListener('change', renderWardrobe);
+  document.getElementById('wardrobeColorFilter').addEventListener('change', renderWardrobe);
+  document.getElementById('wardrobeUntaggedToggle').addEventListener('click', ()=>{
+    wardrobeUntaggedOnly = !wardrobeUntaggedOnly;
+    renderWardrobe();
+  });
+  document.getElementById('wardrobeSelectModeToggle').addEventListener('click', ()=>{
+    wardrobeSelectMode = !wardrobeSelectMode;
+    wardrobeSelectedIds.clear();
+    renderWardrobe();
+  });
+  document.getElementById('wardrobeSelectAllBtn').addEventListener('click', ()=>{
+    const list = getWardrobeFiltered();
+    const allPicked = list.length > 0 && list.every(it => wardrobeSelectedIds.has(it.id));
+    list.forEach(it => { if(allPicked) wardrobeSelectedIds.delete(it.id); else wardrobeSelectedIds.add(it.id); });
+    renderWardrobe();
+  });
+  document.getElementById('wardrobeBulkApplyBtn').addEventListener('click', ()=>{
+    if(wardrobeSelectedIds.size === 0){ alert('請先勾選要標記的單品'); return; }
+    openWardrobeBulkTag();
+  });
+  document.getElementById('wardrobeAddBtn').addEventListener('click', ()=> openWardrobeForm(null));
+  document.getElementById('wardrobeImportBtn').addEventListener('click', openWardrobeImport);
+
   // ---------- Init ----------
   updatePreview();
   renderAllRecords();
   renderMonth();
   renderWishlist();
+  renderWardrobe();
   checkBackupReminder();
 </script>
 
