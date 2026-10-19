@@ -1,0 +1,2878 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>跑步紀錄 / 訓練分析</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f6f3;
+    --panel:#ffffff;
+    --ink:#1c2321;
+    --ink-soft:#5c655f;
+    --line:#dde1dc;
+    --pine:#2f5233;
+    --pine-soft:#e6ede6;
+    --amber:#e8a33d;
+    --amber-soft:#fbecd5;
+    --danger:#b3452f;
+    --radius:10px;
+  }
+  body.dark-mode{
+    --bg:#171d18;
+    --panel:#212a22;
+    --ink:#eef1ea;
+    --ink-soft:#9aa89d;
+    --line:#324035;
+    --pine:#5b9467;
+    --pine-soft:#233a29;
+    --amber:#e8a33d;
+    --amber-soft:#3a2f16;
+    --danger:#e0705a;
+  }
+  body.dark-mode .empty-state{color:var(--ink-soft);}
+  body.dark-mode .stat-card{border-color:var(--line);}
+  body.dark-mode .grid-stats-sm .stat-card{background:var(--pine-soft);}
+  body.dark-mode .drop{background:#1a221b;}
+  body.dark-mode .modal{box-shadow:0 20px 50px rgba(0,0,0,.5);}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      repeating-linear-gradient(115deg, rgba(47,82,51,.05) 0, rgba(47,82,51,.05) 1px, transparent 1px, transparent 72px),
+      radial-gradient(circle at 14% 6%, rgba(232,163,61,.12), transparent 42%),
+      radial-gradient(circle at 88% 92%, rgba(47,82,51,.07), transparent 40%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    display:flex;
+    min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  h1,h2,h3,.brand,.nav-item,.stat-value{font-family:'Space Grotesk',sans-serif;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:220px;
+    flex-shrink:0;
+    background:linear-gradient(190deg, #274a2e 0%, #182d1c 100%);
+    padding:28px 18px;
+    display:flex;
+    flex-direction:column;
+    gap:26px;
+    box-shadow:1px 0 0 rgba(0,0,0,.06);
+  }
+  .brand{font-size:19px;font-weight:700;line-height:1.25;color:#f3d9a6;}
+  .brand span{display:block;font-size:12px;font-weight:500;color:rgba(238,241,234,.6);font-family:'Inter',sans-serif;margin-top:4px;}
+  nav{display:flex;flex-direction:column;gap:4px;}
+  .nav-item{
+    text-align:left;
+    background:none;
+    border:none;
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:14.5px;
+    font-weight:600;
+    color:rgba(238,241,234,.72);
+    cursor:pointer;
+  }
+  .nav-item:hover{background:rgba(255,255,255,.07);color:#fff;}
+  .nav-item.active{background:rgba(232,163,61,.16);color:#f3c467;}
+  .sidebar-foot{margin-top:auto;font-size:12px;color:rgba(238,241,234,.5);line-height:1.6;}
+  .sidebar-foot button{
+    margin-top:10px;
+    width:100%;
+    background:none;
+    border:1px solid rgba(238,241,234,.22);
+    border-radius:8px;
+    padding:7px;
+    font-size:12px;
+    color:#e6a693;
+    cursor:pointer;
+    font-family:'Inter',sans-serif;
+  }
+  .sidebar-foot button:hover{background:rgba(179,69,47,.25);border-color:rgba(179,69,47,.4);}
+
+  /* ---------- Main ---------- */
+  main{flex:1;padding:32px 40px;max-width:1100px;}
+  .page{display:none;}
+  .page.active{display:block;}
+  .page-title{font-size:22px;font-weight:700;margin:0 0 4px;}
+  .page-sub{color:var(--ink-soft);font-size:14px;margin:0 0 26px;}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px 22px;
+  }
+  .grid-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+  .grid-stats-sm{grid-template-columns:repeat(2,1fr);max-width:420px;}
+  .grid-stats-sm .stat-card{background:var(--pine-soft);border-color:transparent;}
+  .period-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+  .period-bar select{
+    border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:13px;font-family:'IBM Plex Mono',monospace;background:var(--panel);color:var(--ink);
+  }
+  .period-hint{font-size:12.5px;color:var(--ink-soft);}
+  .range-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .range-label{font-size:13px;font-weight:600;color:var(--ink-soft);}
+  .range-custom{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft);}
+  .range-custom input[type=date]{
+    border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-size:13px;font-family:'IBM Plex Mono',monospace;background:var(--panel);color:var(--ink);
+  }
+  .stat-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;}
+  .stat-label{font-size:12.5px;color:var(--ink-soft);margin-bottom:8px;}
+  .stat-value{font-size:22px;font-weight:600;font-family:'IBM Plex Mono',monospace;}
+  .stat-value small{font-size:13px;font-weight:500;color:var(--ink-soft);margin-left:2px;}
+  .summary-text{
+    font-size:13.5px;color:var(--ink-soft);background:var(--pine-soft);border-radius:8px;padding:11px 14px;margin:0 0 18px;line-height:1.6;
+  }
+  .summary-text b{color:var(--pine);font-weight:700;}
+  .goal-card{}
+  .goal-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+  .goal-input-row{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-soft);}
+  .goal-input-row input{
+    width:80px;border:1px solid var(--line);border-radius:7px;padding:6px 9px;font-size:13px;font-family:'IBM Plex Mono',monospace;background:var(--panel);color:var(--ink);
+  }
+  .goal-progress-bg{background:var(--bg);border-radius:8px;height:14px;overflow:hidden;}
+  .goal-progress-fill{height:100%;background:var(--pine);border-radius:8px;transition:width .3s;}
+  .goal-progress-fill.warn{background:var(--amber);}
+  .goal-progress-fill.over{background:var(--danger);}
+  .goal-progress-label{font-size:12.5px;color:var(--ink-soft);margin-top:6px;}
+  .week-plan-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;}
+  .week-plan-day{border:1px solid var(--line);border-radius:8px;padding:10px 8px;min-height:88px;background:var(--bg);}
+  .week-plan-day.is-today{border-color:var(--amber);background:var(--amber-soft);}
+  .week-plan-daylabel{font-size:12.5px;font-weight:700;color:var(--ink-soft);display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;}
+  .week-plan-date{font-size:11px;color:var(--ink-soft);margin-bottom:6px;font-family:'IBM Plex Mono',monospace;}
+  .week-plan-tag{font-size:12.5px;font-weight:600;color:var(--pine);margin-bottom:2px;}
+  .week-plan-detail{font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;line-height:1.5;}
+  .week-plan-empty{font-size:12px;color:var(--ink-soft);opacity:.5;}
+  .week-plan-status{font-size:12px;}
+  .week-plan-status.done{color:var(--pine);}
+  .week-plan-status.missed{color:var(--danger);}
+  .band-group-head{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;margin:16px 0 8px;}
+  .band-group-sub{font-weight:400;font-size:12.5px;color:var(--ink-soft);margin-left:8px;font-family:'Inter',sans-serif;}
+  .feeling-picker{display:flex;gap:6px;}
+  .feeling-btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 12px;font-size:18px;cursor:pointer;opacity:.45;line-height:1;}
+  .feeling-btn:hover{opacity:.8;}
+  .feeling-btn.active{opacity:1;border-color:var(--pine);background:var(--pine-soft);}
+  .filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .filter-bar select,.filter-bar input{
+    border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px;font-family:'IBM Plex Mono',monospace;background:var(--panel);color:var(--ink);
+  }
+  .filter-bar input{width:130px;}
+  .heatmap-month-row{position:relative;height:14px;margin-left:24px;font-size:10.5px;color:var(--ink-soft);}
+  .heatmap-month-row span{position:absolute;top:0;white-space:nowrap;}
+  .heatmap-flex{display:flex;gap:6px;}
+  .heatmap-weekdays{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--ink-soft);width:16px;text-align:right;}
+  .heatmap-weekdays div{height:12px;line-height:12px;}
+  .heatmap{display:flex;gap:3px;overflow-x:auto;padding-bottom:6px;}
+  .heatmap-col{display:flex;flex-direction:column;gap:3px;}
+  .heatmap-cell{width:12px;height:12px;border-radius:3px;background:var(--bg);}
+  .heatmap-cell[data-level="1"]{background:#bcdcc2;}
+  .heatmap-cell[data-level="2"]{background:#7ab689;}
+  .heatmap-cell[data-level="3"]{background:#3f8a55;}
+  .heatmap-cell[data-level="4"]{background:var(--pine);}
+  .heatmap-cell[data-today="1"]{outline:1.5px solid var(--amber);outline-offset:-1px;}
+  .heatmap-legend{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-soft);margin-top:8px;}
+  .heatmap-legend .heatmap-cell{width:10px;height:10px;}
+  .heatmap-legend .heatmap-today-note{display:flex;align-items:center;gap:4px;margin-left:14px;}
+
+  .chart-row{display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-bottom:16px;}
+  .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;}
+  .chart-card h3{margin:0 0 2px;font-size:14.5px;}
+  .chart-card .hint{font-size:12px;color:var(--ink-soft);margin:0 0 12px;}
+  .chart-wrap{position:relative;height:230px;}
+  .toggle-group{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;margin-bottom:12px;}
+  .toggle-group button{
+    border:none;background:var(--panel);padding:5px 12px;font-size:12.5px;cursor:pointer;color:var(--ink-soft);font-family:'Inter',sans-serif;
+  }
+  .toggle-group button.active{background:var(--pine);color:#fff;}
+
+  /* ---------- Forms ---------- */
+  .field-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field label{font-size:12.5px;color:var(--ink-soft);font-weight:600;}
+  .field input,.field select{
+    border:1px solid var(--line);border-radius:7px;padding:9px 10px;font-size:14px;font-family:'IBM Plex Mono',monospace;background:var(--panel);color:var(--ink);
+  }
+  .field.wide{grid-column:span 3;}
+  .field input[type=text],.field input[type=date]{font-family:'IBM Plex Mono',monospace;}
+  .duration-row{display:flex;gap:8px;align-items:center;}
+  .duration-row input{width:64px;text-align:center;}
+  .duration-row span{color:var(--ink-soft);font-size:13px;}
+  .btn{
+    border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .btn-primary{background:var(--pine);color:#fff;}
+  .btn-primary:hover{background:#264429;}
+  .btn-secondary{background:var(--bg);color:var(--ink);border:1px solid var(--line);}
+  .btn-secondary:hover{background:#ebebe6;}
+  .btn-amber{background:var(--amber);color:#3b2a05;}
+  .btn-amber:hover{background:#d9922f;}
+  .form-actions{display:flex;gap:10px;margin-top:6px;}
+  .msg{font-size:13px;margin-top:10px;padding:9px 12px;border-radius:7px;display:none;}
+  .msg.ok{display:block;background:var(--pine-soft);color:var(--pine);}
+  .msg.err{display:block;background:#fbeceb;color:var(--danger);}
+
+  /* ---------- Import ---------- */
+  .drop{
+    border:1.5px dashed var(--line);border-radius:var(--radius);padding:34px 20px;text-align:center;color:var(--ink-soft);background:#fbfbf9;margin-bottom:18px;
+  }
+  .drop input{display:none;}
+  .drop label{color:var(--pine);font-weight:600;cursor:pointer;}
+  .drop.dragover{border-color:var(--pine);background:var(--pine-soft);}
+  .preview-note{font-size:13px;color:var(--ink-soft);margin-bottom:10px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);}
+  th{color:var(--ink-soft);font-weight:600;font-size:12px;}
+  td.mono,th.mono{font-family:'IBM Plex Mono',monospace;}
+  tbody tr.clickable{cursor:pointer;}
+  tbody tr.clickable:hover{background:var(--bg);}
+  .table-wrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:var(--radius);}
+  .table-wrap table{border:none;}
+  .table-wrap th{position:sticky;top:0;background:var(--panel);}
+  .empty-state{padding:40px 20px;text-align:center;color:var(--ink-soft);font-size:14px;}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(20,24,20,.42);display:none;align-items:center;justify-content:center;z-index:50;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:var(--panel);border-radius:12px;padding:26px 28px;width:480px;max-width:92vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.18);
+  }
+  .modal h3{margin:0 0 2px;font-size:18px;}
+  .modal .sub{color:var(--ink-soft);font-size:13px;margin:0 0 18px;}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;margin-bottom:20px;}
+  .detail-item .l{font-size:12px;color:var(--ink-soft);margin-bottom:4px;}
+  .detail-item .v{font-size:16px;font-weight:600;font-family:'IBM Plex Mono',monospace;}
+  .detail-edit-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+  .detail-edit-row .field label{font-size:12px;}
+  .detail-edit-row select,.detail-edit-row input{
+    width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 9px;font-size:13.5px;font-family:'IBM Plex Mono',monospace;background:var(--panel);color:var(--ink);
+  }
+  .pace-readonly{
+    font-size:13px;color:var(--ink-soft);margin:6px 0 16px;padding-top:14px;border-top:1px solid var(--line);
+  }
+  .pace-readonly b{color:var(--ink);font-family:'IBM Plex Mono',monospace;}
+  .modal-actions{display:flex;justify-content:space-between;align-items:center;}
+  .shoe-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;}
+  .shoe-card.retired{opacity:.55;}
+  .shoe-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
+  .shoe-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15.5px;}
+  .shoe-meta{font-size:12.5px;color:var(--ink-soft);}
+  .shoe-progress-bg{background:var(--bg);border-radius:6px;height:8px;overflow:hidden;margin:8px 0;}
+  .shoe-progress-fill{height:100%;background:var(--pine);border-radius:6px;}
+  .shoe-progress-fill.warn{background:var(--amber);}
+  .shoe-progress-fill.over{background:var(--danger);}
+  .shoe-actions{display:flex;gap:8px;margin-top:10px;}
+  .shoe-actions button{
+    border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:5px 11px;font-size:12.5px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--ink-soft);
+  }
+  .shoe-actions button:hover{background:var(--bg);}
+
+  @media (max-width:880px){
+    body{flex-direction:column;}
+    .sidebar{width:100%;flex-direction:row;align-items:center;padding:14px 18px;overflow-x:auto;}
+    .sidebar-foot{display:none;}
+    nav{flex-direction:row;}
+    main{padding:20px;}
+    .grid-stats{grid-template-columns:repeat(2,1fr);}
+    .chart-row{grid-template-columns:1fr;}
+    .field-row{grid-template-columns:1fr 1fr;}
+    .field.wide{grid-column:span 2;}
+    .week-plan-grid{grid-template-columns:repeat(4,1fr);}
+  }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="brand">跑步紀錄<span>私人本機訓練分析</span></div>
+  <nav>
+    <button class="nav-item active" data-page="dashboard">總覽</button>
+    <button class="nav-item" data-page="import">匯入 CSV</button>
+    <button class="nav-item" data-page="manual">手動輸入</button>
+    <button class="nav-item" data-page="history">跑步歷史</button>
+    <button class="nav-item" data-page="bands">區間分析</button>
+    <button class="nav-item" data-page="shoes">跑鞋</button>
+    <button class="nav-item" data-page="plan">訓練計畫</button>
+  </nav>
+  <div class="sidebar-foot">
+    <button id="darkModeBtn" type="button">🌙 深色模式</button>
+    <button id="exportBtn" type="button">匯出備份(JSON)</button>
+    <button id="importBtn" type="button">匯入備份</button>
+    <input type="file" id="importFileInput" accept=".json" style="display:none;">
+    資料只存在這台電腦的瀏覽器中,不會上傳。
+    <button id="wipeBtn" type="button">清除所有資料</button>
+  </div>
+</div>
+
+<main>
+
+  <!-- ===== Dashboard ===== -->
+  <section class="page active" id="page-dashboard">
+    <h1 class="page-title">總覽</h1>
+    <p class="page-sub">你的跑步狀態一覽</p>
+
+    <div class="period-bar">
+      <div class="toggle-group" id="statPeriodToggle">
+        <button class="active" data-mode="week">週</button>
+        <button data-mode="month">月</button>
+      </div>
+      <select id="statPeriodSelect"></select>
+    </div>
+
+    <div class="grid-stats" id="statCards"></div>
+
+    <div class="grid-stats grid-stats-sm" id="statCardsAllTime"></div>
+
+    <p class="summary-text" id="periodSummaryText"></p>
+
+    <div class="card goal-card" style="margin-bottom:22px;">
+      <div class="goal-head">
+        <h3 style="margin:0;">目標進度(<span id="goalPeriodLabel">本週</span>)</h3>
+        <div class="goal-input-row">
+          <input type="text" id="goalInput" placeholder="例如 30">
+          <span>km</span>
+          <button class="btn btn-secondary" id="saveGoalBtn">設定</button>
+        </div>
+      </div>
+      <div id="goalProgressWrap"></div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:22px;">
+      <h3>本週訓練計畫</h3>
+      <p class="hint">週一到週日,對照當天有沒有排定的計畫</p>
+      <div id="weekPlanWrap"></div>
+    </div>
+
+    <div class="range-bar">
+      <span class="range-label">圖表範圍</span>
+      <div class="toggle-group" id="rangePreset">
+        <button data-range="4w">近4週</button>
+        <button data-range="3m">近3個月</button>
+        <button data-range="6m">近6個月</button>
+        <button data-range="1y">近1年</button>
+        <button class="active" data-range="all">全部</button>
+      </div>
+      <div class="range-custom">
+        <input type="date" id="rangeStart">
+        <span>至</span>
+        <input type="date" id="rangeEnd">
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:16px;">
+      <h3>跑量</h3>
+      <p class="hint">每週 / 每月累積距離</p>
+      <div class="toggle-group" id="volumeToggle">
+        <button class="active" data-mode="week">依週</button>
+        <button data-mode="month">依月</button>
+      </div>
+      <div class="chart-wrap"><canvas id="volumeChart"></canvas></div>
+    </div>
+
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>配速趨勢</h3>
+        <p class="hint">每次跑步的平均配速(分鐘/公里,越靠上代表越快)</p>
+        <div class="chart-wrap"><canvas id="paceChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>平均心率趨勢</h3>
+        <p class="hint">每次跑步的平均心率(bpm)</p>
+        <div class="chart-wrap"><canvas id="hrChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="chart-card">
+        <h3>跑鞋里程</h3>
+        <p class="hint">依「圖表範圍」加總各雙鞋的累積距離</p>
+        <div class="chart-wrap"><canvas id="shoeChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>訓練類型分佈</h3>
+        <p class="hint">依「圖表範圍」統計各類型跑步的距離佔比</p>
+        <div class="chart-wrap"><canvas id="tagChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:16px;">
+      <h3>月份比較(輕鬆跑 vs 速度課)</h3>
+      <p class="hint">輕鬆跑包含輕鬆跑/LSD/恢復跑;速度課包含節奏跑/間歇跑/測試跑,比較每個月的累積距離</p>
+      <div class="toggle-group" id="monthCompareToggle">
+        <button class="active" data-mode="km">公里</button>
+        <button data-mode="percent">百分比</button>
+      </div>
+      <div class="chart-wrap"><canvas id="monthCompareChart"></canvas></div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:16px;">
+      <h3>個人最佳紀錄</h3>
+      <p class="hint">依全部歷史紀錄,抓出距離最接近該區間、耗時最短的一次(非精確分段計時,僅供參考)</p>
+      <div class="grid-stats" id="prCards"></div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:16px;">
+      <h3>PR 配速趨勢</h3>
+      <p class="hint">每次刷新該區間的最佳配速時記一筆,看得出長期進步曲線(依全部歷史紀錄,不受圖表範圍影響)</p>
+      <div class="chart-wrap"><canvas id="prTrendChart"></canvas></div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:16px;">
+      <h3>跑步熱力圖</h3>
+      <p class="hint">最近 26 週,顏色越深代表當天距離越長</p>
+      <div id="heatmapWrap"></div>
+    </div>
+  </section>
+
+  <!-- ===== Import ===== -->
+  <section class="page" id="page-import">
+    <h1 class="page-title">匯入 Garmin CSV</h1>
+    <p class="page-sub">從 Garmin Connect 匯出的活動紀錄(Activities.csv)匯入,系統會自動抓出跑步類的活動。</p>
+
+    <div class="card" style="margin-bottom:18px;">
+      <div class="field-row" style="grid-template-columns:1fr;margin-bottom:10px;">
+        <div class="field">
+          <label>CSV 內的距離單位</label>
+          <select id="csvUnit">
+            <option value="km">公里(km)— Garmin 帳號單位為公制</option>
+            <option value="mile">英里(mile)— Garmin 帳號單位為英制</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row" style="grid-template-columns:1fr;margin-bottom:0 0 14px;">
+        <div class="field" style="flex-direction:row;align-items:center;gap:8px;">
+          <input type="checkbox" id="onlyRunning" checked style="width:auto;">
+          <label style="font-weight:500;" for="onlyRunning">只匯入跑步類活動(取消勾選則匯入檔案中所有活動)</label>
+        </div>
+      </div>
+      <div class="drop" id="dropZone">
+        <div style="margin-bottom:8px;">將 CSV 檔案拖曳到這裡,或</div>
+        <label for="fileInput">點此選擇檔案</label>
+        <input type="file" id="fileInput" accept=".csv">
+      </div>
+      <div class="msg" id="importMsg"></div>
+    </div>
+
+    <div id="previewArea" style="display:none;">
+      <p class="preview-note" id="previewNote"></p>
+      <div class="table-wrap" style="margin-bottom:14px;">
+        <table>
+          <thead><tr>
+            <th>日期</th><th>標題</th><th class="mono">距離(km)</th><th class="mono">時間</th><th class="mono">平均配速</th><th class="mono">平均心率</th>
+          </tr></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="confirmImportBtn">確認匯入</button>
+        <button class="btn btn-secondary" id="cancelImportBtn">取消</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Manual entry ===== -->
+  <section class="page" id="page-manual">
+    <h1 class="page-title">手動輸入</h1>
+    <p class="page-sub">沒有 Garmin 資料的跑步,可以在這裡直接記錄。</p>
+
+    <div class="card">
+      <div class="field-row">
+        <div class="field">
+          <label>日期</label>
+          <input type="date" id="m_date">
+        </div>
+        <div class="field">
+          <label>距離(公里)</label>
+          <input type="text" id="m_distance" placeholder="例如 5.2">
+        </div>
+        <div class="field">
+          <label>標題(選填)</label>
+          <input type="text" id="m_title" placeholder="例如 河濱夜跑">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field wide">
+          <label>時間</label>
+          <div class="duration-row">
+            <input type="text" id="m_h" placeholder="0" inputmode="numeric"><span>時</span>
+            <input type="text" id="m_m" placeholder="30" inputmode="numeric"><span>分</span>
+            <input type="text" id="m_s" placeholder="00" inputmode="numeric"><span>秒</span>
+          </div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>平均心率(選填)</label>
+          <input type="text" id="m_avgHr" placeholder="bpm">
+        </div>
+        <div class="field">
+          <label>最高心率(選填)</label>
+          <input type="text" id="m_maxHr" placeholder="bpm">
+        </div>
+        <div class="field">
+          <label>平均步頻(選填)</label>
+          <input type="text" id="m_cadence" placeholder="spm">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>跑鞋(選填)</label>
+          <select id="m_shoe"><option value="">未指定</option></select>
+        </div>
+        <div class="field">
+          <label>訓練類型/標籤(選填)</label>
+          <input type="text" id="m_tag" list="tagPresets" placeholder="例如:間歇">
+        </div>
+      </div>
+
+      <div class="field-row" id="m_intervalFields" style="display:none;">
+        <div class="field">
+          <label>組數</label>
+          <input type="text" id="m_sets" placeholder="例如 8">
+        </div>
+        <div class="field">
+          <label>每組依</label>
+          <select id="m_intervalUnit">
+            <option value="distance">距離</option>
+            <option value="time">時間</option>
+          </select>
+        </div>
+        <div class="field" id="m_intervalDistanceField">
+          <label>每組距離(公尺)</label>
+          <input type="text" id="m_intervalDistance" placeholder="例如 400">
+        </div>
+        <div class="field" id="m_intervalTimeField" style="display:none;">
+          <label>每組時間(分:秒)</label>
+          <input type="text" id="m_intervalTime" placeholder="例如 3:00">
+        </div>
+      </div>
+      <div class="field-row" id="m_intervalPaceRow" style="display:none;">
+        <div class="field">
+          <label>每組實際配速(分:秒/公里,選填)</label>
+          <input type="text" id="m_intervalPace" placeholder="例如 4:30">
+        </div>
+      </div>
+
+      <div class="field-row" style="grid-template-columns:1fr;">
+        <div class="field">
+          <label>今天感覺如何(選填)</label>
+          <div class="feeling-picker" id="m_feelingPicker">
+            <button type="button" class="feeling-btn" data-value="1">😫</button>
+            <button type="button" class="feeling-btn" data-value="2">😕</button>
+            <button type="button" class="feeling-btn" data-value="3">😐</button>
+            <button type="button" class="feeling-btn" data-value="4">🙂</button>
+            <button type="button" class="feeling-btn" data-value="5">😄</button>
+          </div>
+          <input type="hidden" id="m_feeling">
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" id="saveManualBtn">儲存這筆紀錄</button>
+      </div>
+      <div class="msg" id="manualMsg"></div>
+    </div>
+  </section>
+
+  <!-- ===== History ===== -->
+  <section class="page" id="page-history">
+    <h1 class="page-title">跑步歷史</h1>
+    <p class="page-sub">點一列可以看詳細資料</p>
+
+    <div class="filter-bar">
+      <select id="filterTag"><option value="">全部標籤</option></select>
+      <select id="filterShoe"><option value="">全部跑鞋</option></select>
+      <input type="text" id="filterMinKm" placeholder="最短距離 km">
+      <input type="text" id="filterMaxKm" placeholder="最長距離 km">
+      <button class="btn btn-secondary" id="clearFilterBtn">清除篩選</button>
+    </div>
+
+    <div class="table-wrap" id="historyWrap"></div>
+  </section>
+
+  <!-- ===== Bands (區間分析) ===== -->
+  <section class="page" id="page-bands">
+    <h1 class="page-title">區間分析</h1>
+    <p class="page-sub">選一個平均心率段或平均配速段,依 5K、10K 列出符合的紀錄(5K 以 4.75–5.25 km、10K 以 9.5–10.5 km 計)。點一列可看詳細資料。</p>
+
+    <div class="card" style="margin-bottom:18px;">
+      <h3 style="margin:0 0 12px;">依平均心率段</h3>
+      <div class="filter-bar"><select id="hrBandSelect"></select></div>
+      <div id="hrBandResult"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 12px;">依平均配速段</h3>
+      <div class="filter-bar"><select id="paceBandSelect"></select></div>
+      <div id="paceBandResult"></div>
+    </div>
+  </section>
+
+  <!-- ===== Shoes ===== -->
+  <section class="page" id="page-shoes">
+    <h1 class="page-title">跑鞋</h1>
+    <p class="page-sub">追蹤每雙鞋累積的里程,提醒自己該換鞋了</p>
+
+    <div class="card" style="margin-bottom:18px;">
+      <div class="field-row">
+        <div class="field">
+          <label>鞋款名稱</label>
+          <input type="text" id="s_name" placeholder="例如:Pegasus 40">
+        </div>
+        <div class="field">
+          <label>開始使用日期(選填)</label>
+          <input type="date" id="s_startDate">
+        </div>
+        <div class="field">
+          <label>目標汰換里程(選填)</label>
+          <input type="text" id="s_targetKm" placeholder="例如 600">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="addShoeBtn">新增這雙鞋</button>
+      </div>
+      <div class="msg" id="shoeMsg"></div>
+    </div>
+
+    <div id="shoeListWrap"></div>
+  </section>
+
+  <!-- ===== Training Plan ===== -->
+  <section class="page" id="page-plan">
+    <h1 class="page-title">訓練計畫</h1>
+    <p class="page-sub">先排好接下來要跑什麼,完成後會自動跟實際紀錄比對</p>
+
+    <div class="grid-stats grid-stats-sm" id="planStats" style="margin-bottom:20px;max-width:340px;"></div>
+
+    <div class="card" style="margin-bottom:18px;">
+      <div class="field-row">
+        <div class="field">
+          <label>日期</label>
+          <input type="date" id="p_date">
+        </div>
+        <div class="field">
+          <label>預計距離(公里)</label>
+          <input type="text" id="p_distance" placeholder="例如 10">
+        </div>
+        <div class="field">
+          <label>類型(選填)</label>
+          <input type="text" id="p_tag" list="tagPresets" placeholder="例如:節奏">
+        </div>
+      </div>
+      <div class="field-row" style="grid-template-columns:1fr;">
+        <div class="field">
+          <label>預期配速(分:秒/公里,選填)</label>
+          <input type="text" id="p_expectedPace" placeholder="例如 5:30">
+        </div>
+      </div>
+
+      <div class="field-row" id="intervalFields" style="display:none;">
+        <div class="field">
+          <label>組數</label>
+          <input type="text" id="p_sets" placeholder="例如 8">
+        </div>
+        <div class="field">
+          <label>每組依</label>
+          <select id="p_intervalUnit">
+            <option value="distance">距離</option>
+            <option value="time">時間</option>
+          </select>
+        </div>
+        <div class="field" id="p_intervalDistanceField">
+          <label>每組距離(公尺)</label>
+          <input type="text" id="p_intervalDistance" placeholder="例如 400">
+        </div>
+        <div class="field" id="p_intervalTimeField" style="display:none;">
+          <label>每組時間(分:秒)</label>
+          <input type="text" id="p_intervalTime" placeholder="例如 3:00">
+        </div>
+      </div>
+      <div class="field-row" id="intervalPaceRow" style="display:none;">
+        <div class="field">
+          <label>每組目標配速(分:秒/公里,選填)</label>
+          <input type="text" id="p_intervalPace" placeholder="例如 4:30">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>實際完成日期(選填)</label>
+          <input type="date" id="p_completedDate">
+        </div>
+        <div class="field wide" style="grid-column:span 2;">
+          <label style="visibility:hidden;">說明</label>
+          <p style="margin:0;font-size:12px;color:var(--ink-soft);line-height:1.5;">如果這天沒跑,但有在別天補跑,可以在這裡填補跑的日期,系統就會照那天去對照有沒有實際紀錄。</p>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field wide">
+          <label>備註(選填)</label>
+          <input type="text" id="p_note" placeholder="例如:配速目標 5:30/km">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="addPlanBtn">加入計畫</button>
+        <button class="btn btn-secondary" id="cancelPlanEditBtn" style="display:none;">取消編輯</button>
+      </div>
+      <div class="msg" id="planMsg"></div>
+    </div>
+
+    <div class="table-wrap" id="planWrap"></div>
+  </section>
+
+</main>
+
+<datalist id="tagPresets">
+  <option value="輕鬆跑">
+  <option value="間歇">
+  <option value="節奏">
+  <option value="LSD">
+  <option value="恢復跑">
+  <option value="測試跑">
+  <option value="比賽">
+</datalist>
+
+<!-- Detail modal -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <h3>跑步詳情</h3>
+    <p class="sub" id="d_sourceLabel"></p>
+
+    <div class="detail-edit-row" style="grid-template-columns:2fr 1fr;">
+      <div class="field"><label>標題</label><input type="text" id="d_editTitle" placeholder="(無標題)"></div>
+      <div class="field"><label>日期</label><input type="date" id="d_editDate"></div>
+    </div>
+    <div class="detail-edit-row" style="grid-template-columns:1fr 2fr;">
+      <div class="field"><label>距離(km)</label><input type="text" id="d_editDistance"></div>
+      <div class="field">
+        <label>時間</label>
+        <div class="duration-row">
+          <input type="text" id="d_editH" style="width:48px;"><span>時</span>
+          <input type="text" id="d_editM" style="width:48px;"><span>分</span>
+          <input type="text" id="d_editS" style="width:48px;"><span>秒</span>
+        </div>
+      </div>
+    </div>
+    <div class="detail-edit-row" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="field"><label>平均心率</label><input type="text" id="d_editAvgHr"></div>
+      <div class="field"><label>最高心率</label><input type="text" id="d_editMaxHr"></div>
+      <div class="field"><label>步頻</label><input type="text" id="d_editCadence"></div>
+    </div>
+    <div class="detail-edit-row">
+      <div class="field">
+        <label>跑鞋</label>
+        <select id="d_shoeSelect"></select>
+      </div>
+      <div class="field">
+        <label>訓練類型/標籤</label>
+        <input type="text" id="d_tagInput" list="tagPresets" placeholder="例如:間歇">
+      </div>
+    </div>
+
+    <div class="detail-edit-row" id="d_intervalFields" style="grid-template-columns:1fr 1fr 1fr 1fr;display:none;">
+      <div class="field"><label>組數</label><input type="text" id="d_sets"></div>
+      <div class="field">
+        <label>每組依</label>
+        <select id="d_intervalUnit">
+          <option value="distance">距離</option>
+          <option value="time">時間</option>
+        </select>
+      </div>
+      <div class="field" id="d_intervalDistanceField"><label>每組距離(m)</label><input type="text" id="d_intervalDistance"></div>
+      <div class="field" id="d_intervalTimeField" style="display:none;"><label>每組時間</label><input type="text" id="d_intervalTime" placeholder="3:00"></div>
+    </div>
+    <div class="detail-edit-row" id="d_intervalPaceRow" style="display:none;">
+      <div class="field"><label>每組實際配速(分:秒/公里)</label><input type="text" id="d_intervalPace" placeholder="4:30"></div>
+    </div>
+
+    <div class="detail-edit-row" style="grid-template-columns:1fr;">
+      <div class="field">
+        <label>今天感覺如何</label>
+        <div class="feeling-picker" id="d_feelingPicker">
+          <button type="button" class="feeling-btn" data-value="1">😫</button>
+          <button type="button" class="feeling-btn" data-value="2">😕</button>
+          <button type="button" class="feeling-btn" data-value="3">😐</button>
+          <button type="button" class="feeling-btn" data-value="4">🙂</button>
+          <button type="button" class="feeling-btn" data-value="5">😄</button>
+        </div>
+        <input type="hidden" id="d_feeling">
+      </div>
+    </div>
+
+    <p class="pace-readonly" id="d_paceReadonly"></p>
+
+    <div class="detail-grid" id="d_grid"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="closeDetailBtn">關閉</button>
+      <button class="btn" id="deleteRunBtn" style="background:#fbeceb;color:var(--danger);">刪除這筆紀錄</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* =========================================================
+   Chart.js 動態載入(多個 CDN 備援)
+   ---------------------------------------------------------
+   之前發現寫死單一 CDN 網址時,遇到那個網址失效(或被瀏覽器擴充功能/
+   防火牆擋掉)圖表就整個掛掉,但 CSV 解析功能(PapaParse)還能正常運作,
+   使用者只會看到「資料匯入成功、但圖表空白」。這裡改成依序嘗試多個
+   來源,任一個成功就繼續。
+   ========================================================= */
+const CHART_JS_SOURCES = [
+  'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
+  'https://unpkg.com/chart.js@4.4.4/dist/chart.umd.min.js'
+];
+function loadScriptWithFallback(urls){
+  return new Promise((resolve)=>{
+    let i = 0;
+    function tryNext(){
+      if(i >= urls.length){ resolve(false); return; }
+      const s = document.createElement('script');
+      s.src = urls[i];
+      s.onload = ()=> resolve(true);
+      s.onerror = ()=>{ i++; tryNext(); };
+      document.head.appendChild(s);
+    }
+    tryNext();
+  });
+}
+const chartJsReady = loadScriptWithFallback(CHART_JS_SOURCES);
+
+/* =========================================================
+   資料儲存(存在瀏覽器 localStorage,只有這台電腦看得到)
+   ========================================================= */
+const STORAGE_KEY = 'runTracker.runs.v1';
+
+function loadRuns(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function saveRuns(runs){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(runs));
+}
+let RUNS = loadRuns();
+
+function addRuns(newRuns){
+  // 用「日期+距離+時間」當作重複判斷的依據,避免同一筆 CSV 重複匯入
+  const existingKeys = new Set(RUNS.map(r => `${r.date}|${r.distanceKm.toFixed(2)}|${r.durationSec}`));
+  let added = 0;
+  newRuns.forEach(r=>{
+    const key = `${r.date}|${r.distanceKm.toFixed(2)}|${r.durationSec}`;
+    if(!existingKeys.has(key)){
+      RUNS.push(r);
+      existingKeys.add(key);
+      added++;
+    }
+  });
+  RUNS.sort((a,b)=> new Date(b.date) - new Date(a.date));
+  saveRuns(RUNS);
+  return added;
+}
+function deleteRun(id){
+  RUNS = RUNS.filter(r=>r.id!==id);
+  saveRuns(RUNS);
+}
+
+/* =========================================================
+   跑鞋資料儲存
+   ========================================================= */
+const SHOES_STORAGE_KEY = 'runTracker.shoes.v1';
+function loadShoes(){
+  try{
+    const raw = localStorage.getItem(SHOES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function saveShoes(shoes){
+  localStorage.setItem(SHOES_STORAGE_KEY, JSON.stringify(shoes));
+}
+let SHOES = loadShoes();
+
+function addShoe(shoe){
+  SHOES.push(shoe);
+  saveShoes(SHOES);
+}
+function setShoeRetired(id, retired){
+  const s = SHOES.find(x=>x.id===id);
+  if(s){ s.retired = retired; saveShoes(SHOES); }
+}
+function deleteShoe(id){
+  SHOES = SHOES.filter(s=>s.id!==id);
+  saveShoes(SHOES);
+  // 這雙鞋底下的跑步紀錄改標成「未指定」,不會被一起刪掉
+  RUNS.forEach(r=>{ if(r.shoeId===id) r.shoeId = null; });
+  saveRuns(RUNS);
+}
+function getShoeName(id){
+  if(!id) return null;
+  const s = SHOES.find(x=>x.id===id);
+  return s ? s.name : null;
+}
+function shoeStats(id){
+  const runs = RUNS.filter(r=>r.shoeId===id);
+  const km = runs.reduce((s,r)=>s+r.distanceKm,0);
+  return {km, count: runs.length};
+}
+
+/* =========================================================
+   週/月目標
+   ========================================================= */
+const GOALS_KEY = 'runTracker.goals.v1';
+function loadGoals(){
+  try{ return JSON.parse(localStorage.getItem(GOALS_KEY)) || {week:null, month:null}; }
+  catch(e){ return {week:null, month:null}; }
+}
+function saveGoals(g){ localStorage.setItem(GOALS_KEY, JSON.stringify(g)); }
+let GOALS = loadGoals();
+
+/* =========================================================
+   訓練計畫
+   ========================================================= */
+const PLAN_KEY = 'runTracker.plan.v1';
+function loadPlan(){
+  try{ return JSON.parse(localStorage.getItem(PLAN_KEY)) || []; }
+  catch(e){ return []; }
+}
+function savePlan(p){ localStorage.setItem(PLAN_KEY, JSON.stringify(p)); }
+let PLAN = loadPlan();
+
+/* =========================================================
+   資料遷移:把舊的「有氧/有氧跑」標籤統一改名為「輕鬆跑」
+   ========================================================= */
+(function migrateAerobicTag(){
+  let runsChanged = false;
+  RUNS.forEach(r=>{
+    if(r.tag && /有氧/.test(r.tag)){
+      r.tag = r.tag.replace(/有氧跑?/g, '輕鬆跑');
+      runsChanged = true;
+    }
+  });
+  if(runsChanged) saveRuns(RUNS);
+
+  let planChanged = false;
+  PLAN.forEach(p=>{
+    if(p.tag && /有氧/.test(p.tag)){
+      p.tag = p.tag.replace(/有氧跑?/g, '輕鬆跑');
+      planChanged = true;
+    }
+  });
+  if(planChanged) savePlan(PLAN);
+})();
+
+/* =========================================================
+   個人最佳紀錄(PR)——依全部歷史紀錄,不受圖表範圍影響
+   ========================================================= */
+const PR_DEFS = [
+  {key:'5k', label:'5K', min:4.75, max:5.25},
+  {key:'10k', label:'10K', min:9.5, max:10.5},
+  {key:'half', label:'半馬', min:20.5, max:21.7},
+  {key:'full', label:'全馬', min:41.0, max:43.0}
+];
+function computePRs(){
+  return PR_DEFS.map(def=>{
+    const bandCandidates = RUNS.filter(r=> r.distanceKm>=def.min && r.distanceKm<=def.max);
+    const best = bandCandidates.length===0 ? null : bandCandidates.reduce((a,b)=> a.durationSec<b.durationSec ? a : b);
+
+    // 「首次達成」用「距離有到門檻」就算,不限定在精確區間內,抓最早的一次
+    const reachedCandidates = RUNS.filter(r=> r.distanceKm>=def.min);
+    const firstRun = reachedCandidates.length===0 ? null : reachedCandidates.reduce((a,b)=> new Date(a.date)<new Date(b.date) ? a : b);
+
+    return Object.assign({}, def, {best, firstRun});
+  });
+}
+function renderPRCards(){
+  const el = document.getElementById('prCards');
+  el.innerHTML = computePRs().map(p=>{
+    const bestHtml = p.best
+      ? `<div class="stat-value">${formatDuration(p.best.durationSec)}</div><div class="period-hint">最佳・${formatDate(p.best.date)}・${p.best.distanceKm.toFixed(2)}km</div>`
+      : `<div class="stat-value" style="font-size:15px;color:var(--ink-soft);">尚無紀錄</div>`;
+    const firstHtml = p.firstRun
+      ? `<div class="period-hint" style="margin-top:4px;">首次達成・${formatDate(p.firstRun.date)}</div>`
+      : '';
+    return `<div class="stat-card"><div class="stat-label">${p.label}</div>${bestHtml}${firstHtml}</div>`;
+  }).join('');
+}
+
+// PR 配速趨勢:對每個距離區間,找出「每次刷新最佳紀錄的當下」,畫成一條逐步進步的折線
+function computePRTrendSeries(){
+  const progressions = PR_DEFS.map(def=>{
+    const candidates = RUNS.filter(r=> r.distanceKm>=def.min && r.distanceKm<=def.max)
+      .slice()
+      .sort((a,b)=> new Date(a.date)-new Date(b.date));
+    let bestSec = Infinity;
+    const points = [];
+    candidates.forEach(r=>{
+      if(r.durationSec < bestSec){
+        bestSec = r.durationSec;
+        points.push({date:r.date, paceSecPerKm:r.paceSecPerKm});
+      }
+    });
+    return {label:def.label, points};
+  }).filter(p=>p.points.length>0);
+
+  if(progressions.length===0) return null;
+
+  const allDates = Array.from(new Set(progressions.flatMap(p=>p.points.map(pt=>pt.date)))).sort();
+  const datasets = progressions.map((p,i)=>{
+    const data = allDates.map(d=>{
+      let val = null;
+      for(const pt of p.points){ if(pt.date<=d) val = pt.paceSecPerKm; else break; }
+      return val;
+    });
+    return {
+      label: p.label,
+      data,
+      borderColor: TAG_CHART_COLORS[i%TAG_CHART_COLORS.length],
+      backgroundColor: TAG_CHART_COLORS[i%TAG_CHART_COLORS.length],
+      spanGaps: true,
+      stepped: true,
+      pointRadius: 3,
+      tension: 0
+    };
+  });
+  return {labels: allDates.map(d=>formatDate(d)), datasets};
+}
+function renderPRTrendChart(){
+  destroyChart('prTrend');
+  const canvas = document.getElementById('prTrendChart');
+  const wrap = canvas.parentElement;
+  let emptyEl = wrap.querySelector('.empty-state');
+  const series = computePRTrendSeries();
+
+  if(!series || typeof Chart==='undefined'){
+    canvas.style.display = 'none';
+    if(!emptyEl){ emptyEl = document.createElement('div'); emptyEl.className = 'empty-state'; wrap.appendChild(emptyEl); }
+    emptyEl.textContent = '還沒有足夠的 5K / 10K / 半馬 / 全馬 距離紀錄可以畫趨勢。';
+    return;
+  }
+  canvas.style.display = '';
+  if(emptyEl) emptyEl.remove();
+
+  charts.prTrend = new Chart(canvas, {
+    type:'line',
+    data: series,
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:true, position:'top', labels:{boxWidth:12,font:{size:11}}}, tooltip:{ callbacks:{ label: c => `${c.dataset.label}:${formatPace(c.parsed.y)}` } } },
+      scales:{ y:{ reverse:true, grid:{color:'#eceee9'}, ticks:{ callback:v=>formatPace(v) } }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+/* =========================================================
+   區間分析:選平均心率段/平均配速段,依 5K、10K 列出符合的紀錄
+   ========================================================= */
+const BAND_DISTANCE_GROUPS = PR_DEFS.slice(0,2); // 5K、10K(之後想加半馬/全馬,改成 PR_DEFS 即可)
+const HR_BAND_WIDTH = 5;     // 心率每 5 bpm 一段:151-155、156-160...
+const PACE_BAND_WIDTH = 15;  // 配速每 15 秒一段:7:00-7:15、7:15-7:30...(含下限、不含上限)
+
+function paceMMSS(sec){
+  const t = Math.round(sec);
+  return `${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;
+}
+function hrBandLow(hr){
+  const h = Math.round(hr);
+  return Math.floor((h-1)/HR_BAND_WIDTH)*HR_BAND_WIDTH + 1;
+}
+function paceBandLow(paceSec){
+  return Math.floor(paceSec/PACE_BAND_WIDTH)*PACE_BAND_WIDTH;
+}
+function inBandDistanceGroup(r){
+  return BAND_DISTANCE_GROUPS.some(g=> r.distanceKm>=g.min && r.distanceKm<=g.max);
+}
+function buildBandSelect(selectId, entries, placeholder){
+  const sel = document.getElementById(selectId);
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">${placeholder}</option>` +
+    entries.map(e=>`<option value="${e.value}">${e.label}</option>`).join('');
+  if(entries.some(e=>e.value===keep)) sel.value = keep;
+}
+function renderBandGroups(wrapId, selected, matchFn){
+  const wrap = document.getElementById(wrapId);
+  if(!selected){
+    wrap.innerHTML = '<div class="empty-state" style="padding:22px;">請先選擇一個區間。</div>';
+    return;
+  }
+  wrap.innerHTML = BAND_DISTANCE_GROUPS.map(g=>{
+    const runs = RUNS
+      .filter(r=> r.distanceKm>=g.min && r.distanceKm<=g.max && matchFn(r))
+      .sort((a,b)=> new Date(b.date)-new Date(a.date));
+    if(runs.length===0){
+      return `<div class="band-group-head">${g.label}<span class="band-group-sub">沒有符合的紀錄</span></div>`;
+    }
+    const avgPace = runs.reduce((s,r)=>s+r.paceSecPerKm,0)/runs.length;
+    const hrRuns = runs.filter(r=>r.avgHr);
+    const avgHr = hrRuns.length ? hrRuns.reduce((s,r)=>s+r.avgHr,0)/hrRuns.length : null;
+    const rows = runs.map(r=>`
+      <tr class="clickable" data-id="${r.id}">
+        <td>${formatDate(r.date)}</td>
+        <td class="mono">${r.distanceKm.toFixed(2)} km</td>
+        <td class="mono">${formatDuration(r.durationSec)}</td>
+        <td class="mono">${formatPace(r.paceSecPerKm)}</td>
+        <td class="mono">${r.avgHr ?? '—'}</td>
+        <td class="mono">${r.maxHr ?? '—'}</td>
+        <td>${r.tag || '—'}</td>
+        <td>${getShoeName(r.shoeId) || '—'}</td>
+      </tr>
+    `).join('');
+    return `
+      <div class="band-group-head">${g.label}<span class="band-group-sub">${runs.length} 筆・平均配速 ${formatPace(avgPace)}${avgHr!=null ? `・平均心率 ${Math.round(avgHr)} bpm` : ''}</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th class="mono">距離</th><th class="mono">時間</th><th class="mono">平均配速</th><th class="mono">平均心率</th><th class="mono">最高心率</th><th>標籤</th><th>跑鞋</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }).join('');
+}
+function renderBandsPage(){
+  const cands = RUNS.filter(inBandDistanceGroup);
+
+  // 心率段選單(只列出 5K/10K 紀錄實際有落到的區段)
+  const hrCounts = {};
+  cands.filter(r=>r.avgHr).forEach(r=>{ const lo = hrBandLow(r.avgHr); hrCounts[lo] = (hrCounts[lo]||0)+1; });
+  const hrEntries = Object.keys(hrCounts).map(Number).sort((a,b)=>a-b).map(lo=>({
+    value: String(lo), label: `${lo}-${lo+HR_BAND_WIDTH-1} bpm(${hrCounts[lo]} 筆)`
+  }));
+  buildBandSelect('hrBandSelect', hrEntries, hrEntries.length ? '請選擇平均心率段' : '還沒有 5K/10K 的心率資料');
+  const hrSel = document.getElementById('hrBandSelect').value;
+  renderBandGroups('hrBandResult', hrSel, r=>{
+    if(!r.avgHr) return false;
+    const lo = Number(hrSel);
+    const h = Math.round(r.avgHr);
+    return h>=lo && h<=lo+HR_BAND_WIDTH-1;
+  });
+
+  // 配速段選單
+  const paceCounts = {};
+  cands.forEach(r=>{ const lo = paceBandLow(r.paceSecPerKm); paceCounts[lo] = (paceCounts[lo]||0)+1; });
+  const paceEntries = Object.keys(paceCounts).map(Number).sort((a,b)=>a-b).map(lo=>({
+    value: String(lo), label: `${paceMMSS(lo)}-${paceMMSS(lo+PACE_BAND_WIDTH)} /km(${paceCounts[lo]} 筆)`
+  }));
+  buildBandSelect('paceBandSelect', paceEntries, paceEntries.length ? '請選擇平均配速段' : '還沒有 5K/10K 的紀錄');
+  const paceSel = document.getElementById('paceBandSelect').value;
+  renderBandGroups('paceBandResult', paceSel, r=>{
+    const lo = Number(paceSel);
+    return r.paceSecPerKm>=lo && r.paceSecPerKm<lo+PACE_BAND_WIDTH;
+  });
+}
+document.getElementById('hrBandSelect').addEventListener('change', renderBandsPage);
+document.getElementById('paceBandSelect').addEventListener('change', renderBandsPage);
+document.getElementById('page-bands').addEventListener('click', (e)=>{
+  const tr = e.target.closest('tr.clickable');
+  if(tr) openDetail(tr.dataset.id);
+});
+
+/* =========================================================
+   跑步熱力圖(最近26週,固定不受圖表範圍影響)
+   ========================================================= */
+function renderHeatmap(){
+  const wrap = document.getElementById('heatmapWrap');
+  if(RUNS.length===0){
+    wrap.innerHTML = '<div class="empty-state">還沒有資料。</div>';
+    return;
+  }
+  const dayTotals = {};
+  RUNS.forEach(r=>{ dayTotals[r.date] = (dayTotals[r.date]||0) + r.distanceKm; });
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayKey = localISODate(today);
+  const endDow = (today.getDay()+6)%7; // 週一=0
+  const end = new Date(today); end.setDate(end.getDate() + (6-endDow)); // 延伸到這週的週日
+  const totalDays = 26*7;
+  const start = new Date(end); start.setDate(start.getDate() - totalDays + 1);
+  const maxKm = Math.max(...Object.values(dayTotals), 0.001);
+  const CELL_STEP = 15; // 12px 方格 + 3px 間距
+
+  // 月份標籤:每當這一週的星期一落在新的月份,就在那一欄上方標註月份
+  let monthHtml = '';
+  let lastMonth = null;
+  for(let w=0; w<26; w++){
+    const colStart = new Date(start); colStart.setDate(colStart.getDate() + w*7);
+    const m = colStart.getMonth();
+    if(m !== lastMonth){
+      monthHtml += `<span style="left:${w*CELL_STEP}px;">${m+1}月</span>`;
+      lastMonth = m;
+    }
+  }
+
+  let gridHtml = '<div class="heatmap">';
+  for(let w=0; w<26; w++){
+    gridHtml += '<div class="heatmap-col">';
+    for(let d=0; d<7; d++){
+      const day = new Date(start); day.setDate(day.getDate() + w*7 + d);
+      const key = localISODate(day);
+      const km = dayTotals[key] || 0;
+      let level = 0;
+      if(km>0){
+        const ratio = km/maxKm;
+        level = ratio>0.66 ? 4 : ratio>0.4 ? 3 : ratio>0.15 ? 2 : 1;
+      }
+      const isToday = key===todayKey;
+      const title = key + (km>0 ? `・${km.toFixed(1)}km` : '') + (isToday ? '(今天)' : '');
+      gridHtml += `<div class="heatmap-cell" data-level="${level}" ${isToday?'data-today="1"':''} title="${title}"></div>`;
+    }
+    gridHtml += '</div>';
+  }
+  gridHtml += '</div>';
+
+  wrap.innerHTML = `
+    <div class="heatmap-month-row">${monthHtml}</div>
+    <div class="heatmap-flex">
+      <div class="heatmap-weekdays"><div>一</div><div></div><div>三</div><div></div><div>五</div><div></div><div>日</div></div>
+      ${gridHtml}
+    </div>
+    <div class="heatmap-legend">
+      少
+      <div class="heatmap-cell" data-level="0"></div>
+      <div class="heatmap-cell" data-level="1"></div>
+      <div class="heatmap-cell" data-level="2"></div>
+      <div class="heatmap-cell" data-level="3"></div>
+      <div class="heatmap-cell" data-level="4"></div>
+      多
+      <span class="heatmap-today-note"><div class="heatmap-cell" data-level="0" data-today="1"></div>今天</span>
+    </div>
+  `;
+}
+
+/* =========================================================
+   共用格式化 / 換算函式
+   ========================================================= */
+function uid(){ return 'r'+Date.now()+Math.random().toString(16).slice(2,8); }
+
+// 取得「本地時區」的日期字串(YYYY-MM-DD)。
+// 注意:不能用 d.toISOString().slice(0,10) —— toISOString 會先轉成 UTC 時間再取日期,
+// 對 UTC+8(台灣)來說,只要本地時間在凌晨 0~8 點之間,轉成 UTC 就會跨到前一天,
+// 導致日期算錯一天(例如清晨跑步的紀錄被記成前一天)。這裡改用本地時間的年/月/日組字串。
+function localISODate(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function formatDate(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return iso;
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDuration(sec){
+  sec = Math.round(sec);
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = sec%60;
+  if(h>0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+function formatPace(secPerKm){
+  if(!isFinite(secPerKm) || secPerKm<=0) return '—';
+  const total = Math.round(secPerKm); // 先四捨五入總秒數,再拆分鐘/秒,避免秒被進位成60
+  const m = Math.floor(total/60);
+  const s = total%60;
+  return `${m}:${String(s).padStart(2,'0')} /km`;
+}
+function parseDurationToSeconds(hStr,mStr,sStr){
+  const h = parseFloat(hStr)||0, m = parseFloat(mStr)||0, s = parseFloat(sStr)||0;
+  return h*3600 + m*60 + s;
+}
+// 解析 Garmin 常見的時間字串,例如 "0:45:23" "45:23" "45:23.4"
+function parseGarminTime(str){
+  if(!str) return null;
+  str = str.trim();
+  const parts = str.split(':').map(p=>parseFloat(p));
+  if(parts.some(isNaN)) return null;
+  if(parts.length===3) return parts[0]*3600+parts[1]*60+parts[2];
+  if(parts.length===2) return parts[0]*60+parts[1];
+  if(parts.length===1) return parts[0];
+  return null;
+}
+function parseGarminDistance(str, unit){
+  if(str===undefined||str===null||str==='') return null;
+  let v = parseFloat(String(str).replace(/,/g,''));
+  if(isNaN(v)) return null;
+  if(unit==='mile') v = v*1.60934;
+  return v;
+}
+function parseGarminDate(str){
+  if(!str) return null;
+  // Garmin 常見格式 "2024-06-01 07:32:10" 或 "2024-06-01"
+  const d = new Date(str.replace(' ', 'T'));
+  if(isNaN(d)) return null;
+  return localISODate(d);
+}
+function parseNum(str){
+  if(str===undefined||str===null||str==='') return null;
+  const v = parseFloat(String(str).replace(/,/g,''));
+  return isNaN(v) ? null : v;
+}
+// 爬升/下降/步幅在 Garmin 匯出檔裡跟著帳號的公制/英制設定走,跟距離單位一致,
+// 所以沿用同一個 unit 選項來換算(英制時是英尺,換算成公尺)
+function parseGarminSmallMetric(str, unit){
+  const v = parseNum(str);
+  if(v===null) return null;
+  return unit==='mile' ? v*0.3048 : v;
+}
+// 配速字串(例如 "5:12")換算成「秒/公里」;英制單位時是「秒/英里」需要換算
+function parseGarminPaceToSecPerKm(str, unit){
+  const sec = parseGarminTime(str);
+  if(sec===null) return null;
+  return unit==='mile' ? sec/1.60934 : sec;
+}
+function getWeekStartLabel(dateObj){
+  const d = new Date(dateObj);
+  const day = (d.getDay()+6)%7; // 週一=0
+  d.setDate(d.getDate()-day);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function weekKey(d){ return localISODate(d); }
+function monthKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+
+/* =========================================================
+   頁籤切換
+   ========================================================= */
+document.querySelectorAll('.nav-item').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('page-'+btn.dataset.page).classList.add('active');
+    if(btn.dataset.page==='dashboard') renderDashboard();
+    if(btn.dataset.page==='history') renderHistory();
+    if(btn.dataset.page==='shoes') renderShoesPage();
+    if(btn.dataset.page==='manual') refreshShoeSelects();
+    if(btn.dataset.page==='plan') renderPlanPage();
+    if(btn.dataset.page==='bands') renderBandsPage();
+  });
+});
+
+/* =========================================================
+   Dashboard
+   ========================================================= */
+let volumeMode = 'week';
+let statPeriodMode = 'week';
+let statPeriodKey = null; // null = 尚未選擇,會自動抓「現在」所在的期間
+let charts = {};
+
+// 三個圖表(跑量/配速趨勢/心率趨勢)共用的日期範圍篩選
+let chartRangeMode = 'all'; // '4w' | '3m' | '6m' | '1y' | 'all' | 'custom'
+let chartRangeStart = null; // Date | null
+let chartRangeEnd = null;   // Date | null
+
+function computePresetRange(preset){
+  const end = new Date();
+  end.setHours(23,59,59,999);
+  if(preset==='all') return {start:null, end:null};
+  const start = new Date(end);
+  if(preset==='4w') start.setDate(start.getDate()-27);
+  else if(preset==='3m') start.setMonth(start.getMonth()-3);
+  else if(preset==='6m') start.setMonth(start.getMonth()-6);
+  else if(preset==='1y') start.setFullYear(start.getFullYear()-1);
+  start.setHours(0,0,0,0);
+  return {start, end};
+}
+function getChartFilteredRuns(){
+  if(!chartRangeStart && !chartRangeEnd) return RUNS;
+  return RUNS.filter(r=>{
+    const d = new Date(r.date);
+    if(chartRangeStart && d < chartRangeStart) return false;
+    if(chartRangeEnd && d > chartRangeEnd) return false;
+    return true;
+  });
+}
+
+// 找出目前資料裡實際存在的所有「週」或「月」,由新到舊排序
+function getAvailablePeriods(mode){
+  const map = new Map();
+  RUNS.forEach(r=>{
+    const d = new Date(r.date);
+    let key, label;
+    if(mode==='week'){
+      const ws = getWeekStartLabel(d);
+      key = weekKey(ws);
+      label = `${ws.getFullYear()}/${ws.getMonth()+1}/${ws.getDate()} 那週`;
+    }else{
+      key = monthKey(d);
+      label = key.replace('-','/') + ' 月';
+    }
+    if(!map.has(key)) map.set(key, label);
+  });
+  return Array.from(map.entries())
+    .map(([key,label])=>({key,label}))
+    .sort((a,b)=> b.key.localeCompare(a.key));
+}
+
+function statsForPeriod(mode, key){
+  const runs = RUNS.filter(r=>{
+    const d = new Date(r.date);
+    return mode==='week' ? weekKey(getWeekStartLabel(d))===key : monthKey(d)===key;
+  });
+  const totalDist = runs.reduce((s,r)=>s+r.distanceKm,0);
+  const count = runs.length;
+  const avgPace = count ? runs.reduce((s,r)=>s+r.paceSecPerKm,0)/count : null;
+  const hrRuns = runs.filter(r=>r.avgHr);
+  const avgHr = hrRuns.length ? hrRuns.reduce((s,r)=>s+r.avgHr,0)/hrRuns.length : null;
+  return {totalDist, count, avgPace, avgHr};
+}
+
+function populateStatPeriodSelect(){
+  const select = document.getElementById('statPeriodSelect');
+  const periods = getAvailablePeriods(statPeriodMode);
+  if(periods.length===0){
+    select.innerHTML = '';
+    statPeriodKey = null;
+    return;
+  }
+  const now = new Date();
+  const currentKey = statPeriodMode==='week' ? weekKey(getWeekStartLabel(now)) : monthKey(now);
+  const keepPrevious = periods.some(p=>p.key===statPeriodKey);
+  if(!keepPrevious){
+    statPeriodKey = periods.some(p=>p.key===currentKey) ? currentKey : periods[0].key;
+  }
+  select.innerHTML = periods.map(p=>
+    `<option value="${p.key}" ${p.key===statPeriodKey?'selected':''}>${p.label}</option>`
+  ).join('');
+}
+
+function getPreviousPeriodKey(mode, key){
+  if(mode==='week'){
+    const d = new Date(key+'T00:00:00');
+    d.setDate(d.getDate()-7);
+    return weekKey(d);
+  }
+  const [y,m] = key.split('-').map(Number);
+  const d = new Date(y, m-2, 1);
+  return monthKey(d);
+}
+
+function renderPeriodSummary(mode, currentKey, currentStats){
+  const el = document.getElementById('periodSummaryText');
+  if(!currentKey || currentStats.count===0){
+    el.textContent = '';
+    return;
+  }
+  const prevKey = getPreviousPeriodKey(mode, currentKey);
+  const prevStats = statsForPeriod(mode, prevKey);
+  const periodWord = mode==='week' ? '這週' : '這個月';
+  const prevWord = mode==='week' ? '上週' : '上個月';
+
+  if(prevStats.count===0){
+    el.innerHTML = `${periodWord}跑了 <b>${currentStats.totalDist.toFixed(1)}km</b>,共 ${currentStats.count} 次。${prevWord}沒有資料可以比較。`;
+    return;
+  }
+  let text = `${periodWord}跑了 <b>${currentStats.totalDist.toFixed(1)}km</b>`;
+  if(prevStats.totalDist>0){
+    const pct = (currentStats.totalDist-prevStats.totalDist)/prevStats.totalDist*100;
+    text += pct>=0 ? `,比${prevWord}多跑 <b>${pct.toFixed(0)}%</b>` : `,比${prevWord}少跑 <b>${Math.abs(pct).toFixed(0)}%</b>`;
+  }
+  if(currentStats.avgPace!=null && prevStats.avgPace!=null){
+    const paceDiff = currentStats.avgPace - prevStats.avgPace; // 負數代表變快
+    if(Math.abs(paceDiff)>=1){
+      text += paceDiff<0 ? `,平均配速進步了 <b>${Math.round(Math.abs(paceDiff))}秒</b>` : `,平均配速慢了 <b>${Math.round(paceDiff)}秒</b>`;
+    }
+  }
+  el.innerHTML = text + '。';
+}
+
+function renderGoalProgress(mode, totalDist){
+  document.getElementById('goalPeriodLabel').textContent = mode==='week' ? '本週' : '本月';
+  const goalVal = GOALS[mode];
+  document.getElementById('goalInput').value = goalVal || '';
+  const wrap = document.getElementById('goalProgressWrap');
+  if(!goalVal){
+    wrap.innerHTML = '<div class="goal-progress-label">尚未設定目標,可以在右上角輸入公里數後按「設定」。</div>';
+    return;
+  }
+  const pct = Math.min(100, (totalDist/goalVal)*100);
+  wrap.innerHTML = `
+    <div class="goal-progress-bg"><div class="goal-progress-fill" style="width:${pct}%;"></div></div>
+    <div class="goal-progress-label">${totalDist.toFixed(1)} / ${goalVal} km(${pct.toFixed(0)}%)${totalDist>=goalVal ? ' 🎉 已達成目標' : ''}</div>
+  `;
+}
+
+function renderStatCards(){
+  const el = document.getElementById('statCards');
+  const allTimeEl = document.getElementById('statCardsAllTime');
+  if(RUNS.length===0){
+    el.innerHTML = '';
+    allTimeEl.innerHTML = '';
+    document.getElementById('statPeriodSelect').innerHTML = '';
+    document.getElementById('periodSummaryText').textContent = '';
+    renderGoalProgress(statPeriodMode, 0);
+    return;
+  }
+
+  populateStatPeriodSelect();
+  const stats = statPeriodKey ? statsForPeriod(statPeriodMode, statPeriodKey) : {totalDist:0,count:0,avgPace:null,avgHr:null};
+  const periodLabel = statPeriodMode==='week' ? '該週' : '該月';
+
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-label">${periodLabel}跑量</div><div class="stat-value">${stats.totalDist.toFixed(1)}<small>km</small></div></div>
+    <div class="stat-card"><div class="stat-label">${periodLabel}次數</div><div class="stat-value">${stats.count}<small>次</small></div></div>
+    <div class="stat-card"><div class="stat-label">${periodLabel}平均配速</div><div class="stat-value">${stats.avgPace!=null ? formatPace(stats.avgPace) : '—'}</div></div>
+    <div class="stat-card"><div class="stat-label">${periodLabel}平均心率</div><div class="stat-value">${stats.avgHr!=null ? Math.round(stats.avgHr) : '—'}${stats.avgHr!=null?'<small>bpm</small>':''}</div></div>
+  `;
+
+  const allTimeDist = RUNS.reduce((s,r)=>s+r.distanceKm,0);
+  allTimeEl.innerHTML = `
+    <div class="stat-card"><div class="stat-label">全部跑步次數</div><div class="stat-value">${RUNS.length}<small>次</small></div></div>
+    <div class="stat-card"><div class="stat-label">全部跑步距離</div><div class="stat-value">${allTimeDist.toFixed(1)}<small>km</small></div></div>
+  `;
+
+  renderPeriodSummary(statPeriodMode, statPeriodKey, stats);
+  renderGoalProgress(statPeriodMode, stats.totalDist);
+}
+
+document.getElementById('saveGoalBtn').addEventListener('click', ()=>{
+  const v = parseFloat(document.getElementById('goalInput').value);
+  GOALS[statPeriodMode] = v>0 ? v : null;
+  saveGoals(GOALS);
+  renderStatCards();
+});
+
+
+document.getElementById('statPeriodToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  statPeriodMode = btn.dataset.mode;
+  statPeriodKey = null; // 換週/月時重新自動選擇當前期間
+  document.querySelectorAll('#statPeriodToggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderStatCards();
+});
+document.getElementById('statPeriodSelect').addEventListener('change', (e)=>{
+  statPeriodKey = e.target.value;
+  renderStatCards();
+});
+
+function destroyChart(key){
+  if(charts[key]){ charts[key].destroy(); charts[key]=null; }
+}
+
+function renderVolumeChart(){
+  destroyChart('volume');
+  const canvas = document.getElementById('volumeChart');
+  const runs = getChartFilteredRuns();
+  if(runs.length===0 || typeof Chart==='undefined') return;
+
+  const groups = {};
+  runs.forEach(r=>{
+    const d = new Date(r.date);
+    let key, label;
+    if(volumeMode==='week'){
+      const ws = getWeekStartLabel(d);
+      key = weekKey(ws);
+      label = `${ws.getMonth()+1}/${ws.getDate()}`;
+    }else{
+      key = monthKey(d);
+      label = key;
+    }
+    if(!groups[key]) groups[key] = {label, total:0};
+    groups[key].total += r.distanceKm;
+  });
+  let keys = Object.keys(groups).sort();
+  if(chartRangeMode==='all') keys = keys.slice(-12); // 沒特別選範圍時,只看最近12期避免太擠
+  const labels = keys.map(k=>groups[k].label);
+  const data = keys.map(k=>+groups[k].total.toFixed(2));
+
+  charts.volume = new Chart(canvas, {
+    type:'bar',
+    data:{ labels, datasets:[{ label:'距離 (km)', data, backgroundColor:'#2f5233', borderRadius:4, maxBarThickness:34 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{ y:{ beginAtZero:true, grid:{color:'#eceee9'} }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+function renderTrendCharts(){
+  destroyChart('pace'); destroyChart('hr');
+  const paceCanvas = document.getElementById('paceChart');
+  const hrCanvas = document.getElementById('hrChart');
+  const runs = getChartFilteredRuns();
+  if(runs.length===0 || typeof Chart==='undefined') return;
+
+  const sorted = [...runs].sort((a,b)=> new Date(a.date)-new Date(b.date));
+  const labels = sorted.map(r=>formatDate(r.date));
+
+  charts.pace = new Chart(paceCanvas, {
+    type:'line',
+    data:{ labels, datasets:[{
+      label:'配速(秒/km)', data: sorted.map(r=>r.paceSecPerKm),
+      borderColor:'#e8a33d', backgroundColor:'#e8a33d', tension:.25, pointRadius:3
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => formatPace(c.parsed.y) } } },
+      scales:{ y:{ reverse:true, grid:{color:'#eceee9'}, ticks:{ callback:v=>formatPace(v) } }, x:{ grid:{display:false} } }
+    }
+  });
+
+  charts.hr = new Chart(hrCanvas, {
+    type:'line',
+    data:{ labels, datasets:[{
+      label:'平均心率(bpm)', data: sorted.map(r=>r.avgHr ?? null),
+      borderColor:'#b3452f', backgroundColor:'#b3452f', tension:.25, pointRadius:3, spanGaps:true
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{ y:{ grid:{color:'#eceee9'} }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+function renderShoeChart(){
+  destroyChart('shoe');
+  const canvas = document.getElementById('shoeChart');
+  const runs = getChartFilteredRuns();
+  if(runs.length===0 || typeof Chart==='undefined') return;
+
+  const groups = {};
+  runs.forEach(r=>{
+    const key = r.shoeId || '__none__';
+    if(!groups[key]) groups[key] = 0;
+    groups[key] += r.distanceKm;
+  });
+  const entries = Object.entries(groups)
+    .map(([id,km])=>({ label: id==='__none__' ? '未指定' : (getShoeName(id) || '未指定'), km }))
+    .sort((a,b)=> b.km-a.km);
+
+  charts.shoe = new Chart(canvas, {
+    type:'bar',
+    data:{ labels: entries.map(e=>e.label), datasets:[{ label:'距離 (km)', data: entries.map(e=>+e.km.toFixed(2)), backgroundColor:'#2f5233', borderRadius:4, maxBarThickness:34 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false} },
+      scales:{ y:{ beginAtZero:true, grid:{color:'#eceee9'} }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+const TAG_CHART_COLORS = ['#2f5233','#e8a33d','#b3452f','#5b7f9e','#8a6fae','#4f9d69','#c97a9e','#9e8a4f'];
+function renderTagChart(){
+  destroyChart('tag');
+  const canvas = document.getElementById('tagChart');
+  const runs = getChartFilteredRuns();
+  if(runs.length===0 || typeof Chart==='undefined') return;
+
+  const groups = {};
+  runs.forEach(r=>{
+    const key = r.tag || '未標記';
+    if(!groups[key]) groups[key] = 0;
+    groups[key] += r.distanceKm;
+  });
+  const entries = Object.entries(groups).sort((a,b)=> b[1]-a[1]);
+
+  charts.tag = new Chart(canvas, {
+    type:'doughnut',
+    data:{
+      labels: entries.map(e=>e[0]),
+      datasets:[{ data: entries.map(e=>+e[1].toFixed(2)), backgroundColor: entries.map((_,i)=>TAG_CHART_COLORS[i%TAG_CHART_COLORS.length]) }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'right', labels:{boxWidth:12,font:{size:11}}}, tooltip:{ callbacks:{ label: c => `${c.label}:${c.parsed.toFixed(1)} km` } } }
+    }
+  });
+}
+
+// 輕鬆跑:輕鬆跑/LSD/恢復跑;速度課:節奏跑/間歇跑/測試跑(不分大小寫、允許「跑」字變化寫法)
+let monthCompareMode = 'km'; // 'km' | 'percent'
+const EASY_RUN_KEYWORDS = ['輕鬆','lsd','恢復'];
+const SPEED_RUN_KEYWORDS = ['節奏','間歇','測試'];
+function classifyRunCategory(tag){
+  const t = (tag||'').toLowerCase();
+  if(EASY_RUN_KEYWORDS.some(kw=>t.includes(kw))) return 'easy';
+  if(SPEED_RUN_KEYWORDS.some(kw=>t.includes(kw))) return 'speed';
+  return null;
+}
+function renderMonthCompareChart(){
+  destroyChart('monthCompare');
+  const canvas = document.getElementById('monthCompareChart');
+  const wrap = canvas.parentElement;
+  let emptyEl = wrap.querySelector('.empty-state');
+
+  const runs = getChartFilteredRuns().filter(r=> classifyRunCategory(r.tag)!==null);
+
+  if(runs.length===0 || typeof Chart==='undefined'){
+    canvas.style.display = 'none';
+    if(!emptyEl){ emptyEl = document.createElement('div'); emptyEl.className = 'empty-state'; wrap.appendChild(emptyEl); }
+    emptyEl.textContent = RUNS.length===0
+      ? '還沒有資料,先去「匯入 CSV」或「手動輸入」新增一筆跑步紀錄吧。'
+      : '所選範圍內沒有標記輕鬆跑/LSD/恢復跑或節奏跑/間歇跑/測試跑的紀錄,可以先到跑步歷史幫紀錄補上標籤。';
+    return;
+  }
+  canvas.style.display = '';
+  if(emptyEl) emptyEl.remove();
+
+  const easyByMonth = {}, speedByMonth = {}, allMonths = new Set();
+  runs.forEach(r=>{
+    const key = monthKey(new Date(r.date));
+    allMonths.add(key);
+    if(classifyRunCategory(r.tag)==='easy') easyByMonth[key] = (easyByMonth[key]||0) + r.distanceKm;
+    else speedByMonth[key] = (speedByMonth[key]||0) + r.distanceKm;
+  });
+  let months = Array.from(allMonths).sort();
+  if(chartRangeMode==='all') months = months.slice(-12); // 沒特別選範圍時,只看最近12個月避免太擠
+
+  const easyKm = months.map(k=> +((easyByMonth[k]||0).toFixed(2)));
+  const speedKm = months.map(k=> +((speedByMonth[k]||0).toFixed(2)));
+  const totals = months.map((k,i)=> easyKm[i] + speedKm[i]);
+  const isPercent = monthCompareMode==='percent';
+  const pct = (v,i)=> totals[i]>0 ? +(v/totals[i]*100).toFixed(1) : 0;
+
+  charts.monthCompare = new Chart(canvas, {
+    type:'bar',
+    data:{
+      labels: months,
+      datasets:[
+        { label:'輕鬆跑', data: isPercent ? easyKm.map(pct) : easyKm, backgroundColor:'#2f5233', borderRadius:4, maxBarThickness:isPercent?40:28 },
+        { label:'速度課', data: isPercent ? speedKm.map(pct) : speedKm, backgroundColor:'#e8a33d', borderRadius:4, maxBarThickness:isPercent?40:28 }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true, position:'top', labels:{boxWidth:12,font:{size:11}}},
+        tooltip:{ callbacks:{ label: c=>{
+          const km = (c.datasetIndex===0 ? easyKm : speedKm)[c.dataIndex];
+          const p = totals[c.dataIndex]>0 ? (km/totals[c.dataIndex]*100).toFixed(0) : 0;
+          return `${c.dataset.label}:${km} km(${p}%)`;
+        } } }
+      },
+      scales:{
+        y:{ stacked:isPercent, beginAtZero:true, max:isPercent?100:undefined, grid:{color:'#eceee9'}, ticks:{ callback: v=> isPercent ? v+'%' : v } },
+        x:{ stacked:isPercent, grid:{display:false} }
+      }
+    }
+  });
+}
+document.getElementById('monthCompareToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  monthCompareMode = btn.dataset.mode;
+  document.querySelectorAll('#monthCompareToggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMonthCompareChart();
+});
+
+function renderDashboard(){
+  renderBandsPage();
+  renderStatCards();
+  renderPRCards();
+  renderPRTrendChart();
+  renderHeatmap();
+  renderWeekPlan();
+  const chartIds = ['volumeChart','paceChart','hrChart','shoeChart','tagChart'];
+  const filteredRuns = getChartFilteredRuns();
+  const isEmpty = filteredRuns.length===0;
+  const emptyText = RUNS.length===0
+    ? '還沒有資料,先去「匯入 CSV」或「手動輸入」新增一筆跑步紀錄吧。'
+    : '所選日期範圍內沒有跑步紀錄,試著擴大範圍看看。';
+
+  chartIds.forEach(id=>{
+    const canvas = document.getElementById(id);
+    const wrap = canvas.parentElement;
+    let emptyEl = wrap.querySelector('.empty-state');
+    if(isEmpty){
+      canvas.style.display = 'none';
+      if(!emptyEl){
+        emptyEl = document.createElement('div');
+        emptyEl.className = 'empty-state';
+        wrap.appendChild(emptyEl);
+      }
+      emptyEl.textContent = emptyText;
+    }else{
+      canvas.style.display = '';
+      if(emptyEl) emptyEl.remove();
+    }
+  });
+
+  renderMonthCompareChart();
+
+  if(isEmpty) return;
+  renderVolumeChart();
+  renderTrendCharts();
+  renderShoeChart();
+  renderTagChart();
+}
+
+document.getElementById('rangePreset').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const preset = btn.dataset.range;
+  chartRangeMode = preset;
+  const {start, end} = computePresetRange(preset);
+  chartRangeStart = start;
+  chartRangeEnd = end;
+  document.querySelectorAll('#rangePreset button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('rangeStart').value = start ? localISODate(start) : '';
+  document.getElementById('rangeEnd').value = end ? localISODate(end) : '';
+  renderDashboard();
+});
+document.getElementById('rangeStart').addEventListener('change', (e)=>{
+  chartRangeMode = 'custom';
+  document.querySelectorAll('#rangePreset button').forEach(b=>b.classList.remove('active'));
+  chartRangeStart = e.target.value ? new Date(e.target.value+'T00:00:00') : null;
+  renderDashboard();
+});
+document.getElementById('rangeEnd').addEventListener('change', (e)=>{
+  chartRangeMode = 'custom';
+  document.querySelectorAll('#rangePreset button').forEach(b=>b.classList.remove('active'));
+  chartRangeEnd = e.target.value ? new Date(e.target.value+'T23:59:59') : null;
+  renderDashboard();
+});
+
+document.getElementById('volumeToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  volumeMode = btn.dataset.mode;
+  document.querySelectorAll('#volumeToggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderVolumeChart();
+});
+
+/* =========================================================
+   History + Detail modal
+   ========================================================= */
+function populateHistoryFilters(){
+  const tagSelect = document.getElementById('filterTag');
+  const shoeSelect = document.getElementById('filterShoe');
+  const usedTags = Array.from(new Set(RUNS.map(r=>r.tag).filter(Boolean))).sort();
+  const keepTag = tagSelect.value;
+  tagSelect.innerHTML = '<option value="">全部標籤</option>' + usedTags.map(t=>`<option value="${t}">${t}</option>`).join('');
+  if(usedTags.includes(keepTag)) tagSelect.value = keepTag;
+
+  const keepShoe = shoeSelect.value;
+  shoeSelect.innerHTML = '<option value="">全部跑鞋</option>' + SHOES.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  if(SHOES.some(s=>s.id===keepShoe)) shoeSelect.value = keepShoe;
+}
+function getFilteredHistoryRuns(){
+  const tag = document.getElementById('filterTag').value;
+  const shoeId = document.getElementById('filterShoe').value;
+  const minKm = parseFloat(document.getElementById('filterMinKm').value);
+  const maxKm = parseFloat(document.getElementById('filterMaxKm').value);
+  return RUNS.filter(r=>{
+    if(tag && r.tag!==tag) return false;
+    if(shoeId && r.shoeId!==shoeId) return false;
+    if(!isNaN(minKm) && r.distanceKm<minKm) return false;
+    if(!isNaN(maxKm) && r.distanceKm>maxKm) return false;
+    return true;
+  });
+}
+
+const FEELING_EMOJI = {1:'😫',2:'😕',3:'😐',4:'🙂',5:'😄'};
+function renderHistory(){
+  const wrap = document.getElementById('historyWrap');
+  if(RUNS.length===0){
+    wrap.innerHTML = '<div class="empty-state">還沒有任何跑步紀錄。</div>';
+    return;
+  }
+  populateHistoryFilters();
+  const filtered = getFilteredHistoryRuns();
+  if(filtered.length===0){
+    wrap.innerHTML = '<div class="empty-state">篩選條件下沒有符合的紀錄,試著調整篩選看看。</div>';
+    return;
+  }
+  const rows = filtered.map(r=>`
+    <tr class="clickable" data-id="${r.id}">
+      <td>${formatDate(r.date)}</td>
+      <td class="mono">${r.distanceKm.toFixed(2)} km</td>
+      <td class="mono">${formatDuration(r.durationSec)}</td>
+      <td class="mono">${formatPace(r.paceSecPerKm)}</td>
+      <td class="mono">${r.avgHr ?? '—'}</td>
+      <td class="mono">${r.maxHr ?? '—'}</td>
+      <td class="mono">${r.cadence ?? '—'}</td>
+      <td>${r.tag || '—'}</td>
+      <td>${getShoeName(r.shoeId) || '—'}</td>
+      <td>${FEELING_EMOJI[r.feeling] || '—'}</td>
+    </tr>
+  `).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>日期</th><th class="mono">距離</th><th class="mono">時間</th><th class="mono">平均配速</th><th class="mono">平均心率</th><th class="mono">最高心率</th><th class="mono">步頻</th><th>標籤</th><th>跑鞋</th><th>感受</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('tr.clickable').forEach(tr=>{
+    tr.addEventListener('click', ()=> openDetail(tr.dataset.id));
+  });
+}
+['filterTag','filterShoe'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', renderHistory);
+});
+['filterMinKm','filterMaxKm'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderHistory);
+});
+document.getElementById('clearFilterBtn').addEventListener('click', ()=>{
+  document.getElementById('filterTag').value = '';
+  document.getElementById('filterShoe').value = '';
+  document.getElementById('filterMinKm').value = '';
+  document.getElementById('filterMaxKm').value = '';
+  renderHistory();
+});
+
+// 讓任一筆跑步紀錄可以事後補上/修改跑鞋與標籤(CSV 匯入的資料本來就不會有這兩項)
+function updateRunField(id, field, value){
+  const r = RUNS.find(x=>x.id===id);
+  if(!r) return;
+  r[field] = value;
+  saveRuns(RUNS);
+  refreshTagDatalist();
+  renderHistory();
+  renderDashboard();
+  if(document.getElementById('page-shoes').classList.contains('active')) renderShoesPage();
+}
+
+let currentDetailId = null;
+function openDetail(id){
+  const r = RUNS.find(x=>x.id===id);
+  if(!r) return;
+  currentDetailId = id;
+  document.getElementById('d_sourceLabel').textContent = r.source==='csv' ? '匯入自 Garmin CSV' : '手動輸入';
+
+  document.getElementById('d_editTitle').value = r.title || '';
+  document.getElementById('d_editDate').value = r.date;
+  document.getElementById('d_editDistance').value = r.distanceKm;
+  document.getElementById('d_editH').value = Math.floor(r.durationSec/3600);
+  document.getElementById('d_editM').value = Math.floor((r.durationSec%3600)/60);
+  document.getElementById('d_editS').value = Math.round(r.durationSec%60);
+  document.getElementById('d_editAvgHr').value = r.avgHr ?? '';
+  document.getElementById('d_editMaxHr').value = r.maxHr ?? '';
+  document.getElementById('d_editCadence').value = r.cadence ?? '';
+  document.getElementById('d_paceReadonly').innerHTML = `平均配速:<b>${formatPace(r.paceSecPerKm)}</b>(依距離與時間自動計算)`;
+
+  // 以下是選填欄位,CSV 裡有值才會顯示;這些欄位比較少用,先不開放直接編輯
+  const items = [];
+  if(r.calories) items.push(['卡路里', `${r.calories} kcal`]);
+  if(r.elevGainM!=null) items.push(['總爬升', `${Math.round(r.elevGainM)} m`]);
+  if(r.elevLossM!=null) items.push(['總下降', `${Math.round(r.elevLossM)} m`]);
+  if(r.avgStrideM!=null) items.push(['平均步幅', `${r.avgStrideM.toFixed(2)} m`]);
+  if(r.bestPaceSecPerKm!=null) items.push(['最佳配速', formatPace(r.bestPaceSecPerKm)]);
+  if(r.trainingEffect!=null) items.push(['有氧訓練效果', r.trainingEffect.toFixed(1)]);
+  if(r.tss!=null) items.push(['Training Stress Score', r.tss.toFixed(1)]);
+  document.getElementById('d_grid').innerHTML = items.map(([l,v])=>
+    `<div class="detail-item"><div class="l">${l}</div><div class="v">${v}</div></div>`
+  ).join('');
+
+  // 跑鞋/標籤:直接在詳情裡就能編輯,選了就立刻儲存
+  const shoeSelect = document.getElementById('d_shoeSelect');
+  const activeOrAssigned = SHOES.filter(s => !s.retired || s.id===r.shoeId);
+  shoeSelect.innerHTML = '<option value="">未指定</option>' + activeOrAssigned.map(s=>
+    `<option value="${s.id}" ${s.id===r.shoeId?'selected':''}>${s.name}${s.retired?'(已停用)':''}</option>`
+  ).join('');
+  document.getElementById('d_tagInput').value = r.tag || '';
+
+  // 間歇組別:選了節奏/間歇才會顯示這幾個欄位
+  const iv = r.intervals;
+  document.getElementById('d_sets').value = iv ? (iv.sets ?? '') : '';
+  document.getElementById('d_intervalUnit').value = iv ? iv.perUnit : 'distance';
+  document.getElementById('d_intervalDistance').value = iv && iv.perDistanceM!=null ? iv.perDistanceM : '';
+  document.getElementById('d_intervalTime').value = iv && iv.perTimeSec ? formatDuration(iv.perTimeSec) : '';
+  document.getElementById('d_intervalPace').value = iv && iv.paceSecPerKm ? formatPace(iv.paceSecPerKm).replace(' /km','') : '';
+  updateDetailIntervalVisibility();
+  const ivIsTime = iv && iv.perUnit==='time';
+  document.getElementById('d_intervalDistanceField').style.display = ivIsTime ? 'none' : '';
+  document.getElementById('d_intervalTimeField').style.display = ivIsTime ? '' : 'none';
+
+  // 感受評分
+  setFeelingPickerValue('d_feelingPicker','d_feeling', r.feeling);
+
+  document.getElementById('detailOverlay').classList.add('show');
+}
+
+// 核心欄位(標題/日期/距離/時間/心率/步頻/間歇/感受)改成隨時可編輯,異動就立刻存檔
+function saveDetailCoreFields(){
+  if(!currentDetailId) return;
+  const r = RUNS.find(x=>x.id===currentDetailId);
+  if(!r) return;
+
+  const distance = parseFloat(document.getElementById('d_editDistance').value);
+  const durationSec = parseDurationToSeconds(
+    document.getElementById('d_editH').value,
+    document.getElementById('d_editM').value,
+    document.getElementById('d_editS').value
+  );
+  if(!(distance>0) || !(durationSec>0)) return; // 距離或時間不合理就先不存,避免資料壞掉
+
+  r.title = document.getElementById('d_editTitle').value.trim() || null;
+  r.date = document.getElementById('d_editDate').value || r.date;
+  r.distanceKm = distance;
+  r.durationSec = durationSec;
+  r.paceSecPerKm = durationSec/distance;
+  r.avgHr = parseFloat(document.getElementById('d_editAvgHr').value) || null;
+  r.maxHr = parseFloat(document.getElementById('d_editMaxHr').value) || null;
+  r.cadence = parseFloat(document.getElementById('d_editCadence').value) || null;
+
+  const tag = document.getElementById('d_tagInput').value.trim();
+  const isIntervalType = tag && (tag.includes('節奏') || tag.includes('間歇'));
+  const sets = parseFloat(document.getElementById('d_sets').value);
+  if(isIntervalType && sets>0){
+    const unit = document.getElementById('d_intervalUnit').value;
+    r.intervals = {
+      sets,
+      perUnit: unit,
+      perDistanceM: unit==='distance' ? (parseFloat(document.getElementById('d_intervalDistance').value) || null) : null,
+      perTimeSec: unit==='time' ? parseGarminTime(document.getElementById('d_intervalTime').value) : null,
+      paceSecPerKm: parseGarminTime(document.getElementById('d_intervalPace').value) || null
+    };
+  }else{
+    r.intervals = null;
+  }
+  r.feeling = parseFloat(document.getElementById('d_feeling').value) || null;
+
+  saveRuns(RUNS);
+  document.getElementById('d_paceReadonly').innerHTML = `平均配速:<b>${formatPace(r.paceSecPerKm)}</b>(依距離與時間自動計算)`;
+  renderHistory();
+  renderDashboard();
+}
+['d_editTitle','d_editDate','d_editDistance','d_editH','d_editM','d_editS','d_editAvgHr','d_editMaxHr','d_editCadence','d_sets','d_intervalDistance','d_intervalTime','d_intervalPace'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', saveDetailCoreFields);
+});
+
+document.getElementById('d_shoeSelect').addEventListener('change', (e)=>{
+  if(!currentDetailId) return;
+  updateRunField(currentDetailId, 'shoeId', e.target.value || null);
+});
+document.getElementById('d_tagInput').addEventListener('change', (e)=>{
+  if(!currentDetailId) return;
+  updateRunField(currentDetailId, 'tag', e.target.value.trim() || null);
+});
+document.getElementById('closeDetailBtn').addEventListener('click', ()=>{
+  document.getElementById('detailOverlay').classList.remove('show');
+});
+document.getElementById('detailOverlay').addEventListener('click', (e)=>{
+  if(e.target.id==='detailOverlay') document.getElementById('detailOverlay').classList.remove('show');
+});
+document.getElementById('deleteRunBtn').addEventListener('click', ()=>{
+  if(!currentDetailId) return;
+  if(confirm('確定要刪除這筆跑步紀錄嗎?這個動作無法復原。')){
+    deleteRun(currentDetailId);
+    document.getElementById('detailOverlay').classList.remove('show');
+    renderHistory();
+    renderDashboard();
+  }
+});
+
+/* =========================================================
+   跑鞋頁面
+   ========================================================= */
+function refreshShoeSelects(){
+  const m = document.getElementById('m_shoe');
+  const activeShoes = SHOES.filter(s=>!s.retired);
+  const keep = m.value;
+  m.innerHTML = '<option value="">未指定</option>' + activeShoes.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  if(activeShoes.some(s=>s.id===keep)) m.value = keep;
+}
+function refreshTagDatalist(){
+  const datalist = document.getElementById('tagPresets');
+  const presetValues = new Set(['輕鬆跑','間歇','節奏','LSD','恢復跑','測試跑','比賽']);
+  const usedTags = new Set(RUNS.map(r=>r.tag).filter(Boolean));
+  usedTags.forEach(t=>{
+    if(!presetValues.has(t) && !datalist.querySelector(`option[value="${CSS.escape(t)}"]`)){
+      const opt = document.createElement('option');
+      opt.value = t;
+      datalist.appendChild(opt);
+    }
+  });
+}
+
+function renderShoesPage(){
+  const wrap = document.getElementById('shoeListWrap');
+  if(SHOES.length===0){
+    wrap.innerHTML = '<div class="empty-state">還沒有加入任何跑鞋,先在上面新增一雙吧。</div>';
+    return;
+  }
+  const sorted = [...SHOES].sort((a,b)=> (a.retired===b.retired ? 0 : a.retired ? 1 : -1));
+  wrap.innerHTML = sorted.map(s=>{
+    const {km, count} = shoeStats(s.id);
+    const target = s.targetKm;
+    let progressHtml = '';
+    if(target){
+      const pct = Math.min(100, (km/target)*100);
+      const cls = km>=target ? 'over' : (pct>=85 ? 'warn' : '');
+      progressHtml = `
+        <div class="shoe-progress-bg"><div class="shoe-progress-fill ${cls}" style="width:${pct}%;"></div></div>
+        <div class="shoe-meta">${km.toFixed(1)} / ${target} km ${km>=target ? '・已超過建議汰換里程,考慮換鞋了' : ''}</div>
+      `;
+    }
+    return `
+      <div class="shoe-card ${s.retired?'retired':''}">
+        <div class="shoe-head">
+          <span class="shoe-name">${s.name}${s.retired?'(已停用)':''}</span>
+          <span class="shoe-meta">${count} 次・共 ${km.toFixed(1)} km</span>
+        </div>
+        ${progressHtml}
+        <div class="shoe-actions">
+          <button data-action="${s.retired?'reactivate':'retire'}" data-id="${s.id}">${s.retired?'重新啟用':'標記為停用'}</button>
+          <button data-action="delete" data-id="${s.id}">刪除這雙鞋</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+document.getElementById('shoeListWrap').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-action]');
+  if(!btn) return;
+  const id = btn.dataset.id;
+  if(btn.dataset.action==='retire'){ setShoeRetired(id, true); }
+  else if(btn.dataset.action==='reactivate'){ setShoeRetired(id, false); }
+  else if(btn.dataset.action==='delete'){
+    if(confirm('確定要刪除這雙鞋嗎?底下的跑步紀錄會改標成「未指定」,不會被刪除。')) deleteShoe(id);
+    else return;
+  }
+  refreshShoeSelects();
+  renderShoesPage();
+  renderHistory();
+  renderDashboard();
+});
+document.getElementById('addShoeBtn').addEventListener('click', ()=>{
+  const msg = document.getElementById('shoeMsg');
+  const name = document.getElementById('s_name').value.trim();
+  if(!name){
+    msg.className = 'msg err';
+    msg.textContent = '請至少輸入鞋款名稱。';
+    return;
+  }
+  addShoe({
+    id: uid(),
+    name,
+    startDate: document.getElementById('s_startDate').value || null,
+    targetKm: parseFloat(document.getElementById('s_targetKm').value) || null,
+    retired: false
+  });
+  msg.className = 'msg ok';
+  msg.textContent = `已新增「${name}」。`;
+  document.getElementById('s_name').value = '';
+  document.getElementById('s_startDate').value = '';
+  document.getElementById('s_targetKm').value = '';
+  refreshShoeSelects();
+  renderShoesPage();
+});
+
+/* =========================================================
+   訓練計畫頁面
+   ========================================================= */
+function formatIntervals(iv){
+  if(!iv) return '';
+  const per = iv.perUnit==='time' ? formatDuration(iv.perTimeSec) : `${iv.perDistanceM}m`;
+  const pace = iv.paceSecPerKm ? ` @ ${formatPace(iv.paceSecPerKm)}` : '';
+  return `${iv.sets} 組 x ${per}${pace}`;
+}
+
+// 總覽用:本週(週一~週日)的訓練計畫小卡,跟計畫頁面共用 formatIntervals
+function renderWeekPlan(){
+  const wrap = document.getElementById('weekPlanWrap');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const monday = getWeekStartLabel(today);
+  const todayKey = localISODate(today);
+  const dayNames = ['一','二','三','四','五','六','日'];
+
+  let html = '<div class="week-plan-grid">';
+  for(let i=0; i<7; i++){
+    const d = new Date(monday); d.setDate(d.getDate()+i);
+    const key = localISODate(d);
+    const plan = PLAN.find(p=>p.date===key);
+    const madeUp = plan && plan.completedDate && plan.completedDate!==plan.date;
+    const done = RUNS.some(r=>r.date===key) || (madeUp && RUNS.some(r=>r.date===plan.completedDate));
+    const isToday = key===todayKey;
+
+    let bodyHtml;
+    if(plan){
+      const distText = plan.distanceKm!=null ? `${plan.distanceKm} km` : '';
+      const paceText = plan.expectedPaceSecPerKm ? ` @ ${formatPace(plan.expectedPaceSecPerKm)}` : '';
+      const intervalText = plan.intervals ? formatIntervals(plan.intervals) : '';
+      bodyHtml = `
+        <div class="week-plan-tag">${plan.tag || '訓練'}</div>
+        <div class="week-plan-detail">${distText}${paceText}</div>
+        ${intervalText ? `<div class="week-plan-detail">${intervalText}</div>` : ''}
+        ${madeUp ? `<div class="week-plan-detail" style="color:var(--amber);">補跑於 ${formatDate(plan.completedDate)}</div>` : ''}
+      `;
+    }else{
+      bodyHtml = `<div class="week-plan-empty">未排定</div>`;
+    }
+
+    let statusBadge = '';
+    if(done) statusBadge = '<span class="week-plan-status done">✓</span>';
+    else if(madeUp) statusBadge = '<span class="week-plan-status" style="color:var(--amber);">↻</span>';
+    else if(plan && key<todayKey) statusBadge = '<span class="week-plan-status missed">✕</span>';
+
+    html += `
+      <div class="week-plan-day ${isToday?'is-today':''}">
+        <div class="week-plan-daylabel"><span>${dayNames[i]}</span>${statusBadge}</div>
+        <div class="week-plan-date">${d.getMonth()+1}/${d.getDate()}</div>
+        ${bodyHtml}
+      </div>
+    `;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function isPlanCompleted(p){
+  const effectiveDate = p.completedDate || p.date;
+  return RUNS.some(r=>r.date===effectiveDate);
+}
+function renderPlanStats(){
+  const el = document.getElementById('planStats');
+  const today = localISODate(new Date());
+  const resolved = PLAN.filter(p=>p.date<=today); // 只算已經到期的計畫,還沒到的先不計入
+  const completed = resolved.filter(isPlanCompleted);
+  const thisMonth = monthKey(new Date());
+  const monthResolved = resolved.filter(p=>monthKey(new Date(p.date))===thisMonth);
+  const monthCompleted = monthResolved.filter(isPlanCompleted);
+
+  const fmt = (c,t)=> t===0 ? '—' : `${c}/${t}<small>(${Math.round(c/t*100)}%)</small>`;
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-label">本月達成率</div><div class="stat-value">${fmt(monthCompleted.length, monthResolved.length)}</div></div>
+    <div class="stat-card"><div class="stat-label">全部達成率</div><div class="stat-value">${fmt(completed.length, resolved.length)}</div></div>
+  `;
+}
+
+let postponingPlanId = null;
+function renderPlanPage(){
+  renderPlanStats();
+  const wrap = document.getElementById('planWrap');
+  if(PLAN.length===0){
+    wrap.innerHTML = '<div class="empty-state">還沒有排定任何訓練計畫,先在上面加入一筆吧。</div>';
+    return;
+  }
+  const today = localISODate(new Date());
+  const sorted = [...PLAN].sort((a,b)=> new Date(a.date)-new Date(b.date));
+  const rows = sorted.map(p=>{
+    const isMadeUp = p.completedDate && p.completedDate!==p.date;
+    const effectiveDate = p.completedDate || p.date;
+    const matched = RUNS.filter(r=>r.date===effectiveDate);
+    const done = matched.length>0;
+    const doneKm = matched.reduce((s,r)=>s+r.distanceKm,0);
+    const madeUpNote = isMadeUp ? `・補跑於 ${formatDate(p.completedDate)}` : '';
+    const isMissed = !done && !isMadeUp && p.date < today;
+    let statusHtml;
+    if(done) statusHtml = `<span style="color:var(--pine);font-weight:600;">✓ 已完成(實際 ${doneKm.toFixed(1)}km${madeUpNote})</span>`;
+    else if(isMadeUp) statusHtml = `<span style="color:var(--amber);">已標記補跑於 ${formatDate(p.completedDate)},但那天還沒有對應紀錄</span>`;
+    else if(isMissed) statusHtml = `<span style="color:var(--danger);">未完成</span>`;
+    else statusHtml = `<span style="color:var(--ink-soft);">尚未到期</span>`;
+    const tagCell = p.intervals
+      ? `${p.tag || '—'}<div class="period-hint">${formatIntervals(p.intervals)}</div>`
+      : (p.tag || '—');
+    const distanceCell = (p.distanceKm!=null ? p.distanceKm+' km' : '—')
+      + (p.expectedPaceSecPerKm ? `<div class="period-hint">@ ${formatPace(p.expectedPaceSecPerKm)}</div>` : '');
+
+    const actionsHtml = postponingPlanId===p.id
+      ? `
+        <div style="display:flex;gap:4px;align-items:center;">
+          <input type="date" id="postponeDateInput" value="${today}" style="border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;font-family:'IBM Plex Mono',monospace;background:var(--panel);color:var(--ink);">
+          <button data-action="confirmPostpone" data-id="${p.id}" style="border:none;background:var(--pine);color:#fff;border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;">確定</button>
+          <button data-action="cancelPostpone" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:4px 9px;font-size:12px;cursor:pointer;color:var(--ink-soft);">取消</button>
+        </div>
+      `
+      : `
+        <button data-action="editPlan" data-id="${p.id}" style="border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink-soft);margin-right:4px;">編輯</button>
+        ${isMissed ? `<button data-action="postponePlan" data-id="${p.id}" style="border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--amber);margin-right:4px;">延期</button>` : ''}
+        <button data-action="deletePlan" data-id="${p.id}" style="border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink-soft);">刪除</button>
+      `;
+
+    return `
+      <tr>
+        <td>${formatDate(p.date)}</td>
+        <td class="mono">${distanceCell}</td>
+        <td>${tagCell}</td>
+        <td>${p.note || '—'}</td>
+        <td>${statusHtml}</td>
+        <td style="white-space:nowrap;">${actionsHtml}</td>
+      </tr>
+    `;
+  }).join('');
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>日期</th><th class="mono">預計距離</th><th>類型</th><th>備註</th><th>狀態</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+document.getElementById('planWrap').addEventListener('click', (e)=>{
+  const delBtn = e.target.closest('button[data-action="deletePlan"]');
+  if(delBtn){
+    PLAN = PLAN.filter(p=>p.id!==delBtn.dataset.id);
+    savePlan(PLAN);
+    if(editingPlanId===delBtn.dataset.id) exitPlanEditMode();
+    renderPlanPage();
+    return;
+  }
+  const postponeBtn = e.target.closest('button[data-action="postponePlan"]');
+  if(postponeBtn){
+    postponingPlanId = postponeBtn.dataset.id;
+    renderPlanPage();
+    return;
+  }
+  const cancelPostponeBtn = e.target.closest('button[data-action="cancelPostpone"]');
+  if(cancelPostponeBtn){
+    postponingPlanId = null;
+    renderPlanPage();
+    return;
+  }
+  const confirmPostponeBtn = e.target.closest('button[data-action="confirmPostpone"]');
+  if(confirmPostponeBtn){
+    const newDate = document.getElementById('postponeDateInput').value;
+    if(newDate){
+      const p = PLAN.find(x=>x.id===confirmPostponeBtn.dataset.id);
+      if(p){
+        p.date = newDate;
+        p.completedDate = null; // 延期是改排定日期,不是標記補跑,清掉避免混淆
+        savePlan(PLAN);
+      }
+    }
+    postponingPlanId = null;
+    renderPlanPage();
+    return;
+  }
+  const editBtn = e.target.closest('button[data-action="editPlan"]');
+  if(editBtn) enterPlanEditMode(editBtn.dataset.id);
+});
+
+// 選「節奏」或「間歇」時,才顯示組數/每組距離或時間/配速這幾個欄位
+function updateIntervalFieldsVisibility(){
+  const tag = document.getElementById('p_tag').value;
+  const show = tag.includes('節奏') || tag.includes('間歇');
+  document.getElementById('intervalFields').style.display = show ? '' : 'none';
+  document.getElementById('intervalPaceRow').style.display = show ? '' : 'none';
+}
+document.getElementById('p_tag').addEventListener('input', updateIntervalFieldsVisibility);
+document.getElementById('p_intervalUnit').addEventListener('change', (e)=>{
+  const isTime = e.target.value==='time';
+  document.getElementById('p_intervalDistanceField').style.display = isTime ? 'none' : '';
+  document.getElementById('p_intervalTimeField').style.display = isTime ? '' : 'none';
+});
+
+// 通用版:讓「手動輸入」與「詳情編輯」也能記錄間歇組別,選到節奏/間歇才顯示
+function wireIntervalToggle(tagInputId, fieldsId, paceRowId, unitId, distFieldId, timeFieldId, onChange){
+  function update(){
+    const tag = document.getElementById(tagInputId).value;
+    const show = tag.includes('節奏') || tag.includes('間歇');
+    document.getElementById(fieldsId).style.display = show ? '' : 'none';
+    document.getElementById(paceRowId).style.display = show ? '' : 'none';
+  }
+  document.getElementById(tagInputId).addEventListener('input', update);
+  document.getElementById(unitId).addEventListener('change', (e)=>{
+    const isTime = e.target.value==='time';
+    document.getElementById(distFieldId).style.display = isTime ? 'none' : '';
+    document.getElementById(timeFieldId).style.display = isTime ? '' : 'none';
+    if(onChange) onChange();
+  });
+  return update;
+}
+const updateManualIntervalVisibility = wireIntervalToggle('m_tag','m_intervalFields','m_intervalPaceRow','m_intervalUnit','m_intervalDistanceField','m_intervalTimeField');
+const updateDetailIntervalVisibility = wireIntervalToggle('d_tagInput','d_intervalFields','d_intervalPaceRow','d_intervalUnit','d_intervalDistanceField','d_intervalTimeField', ()=>saveDetailCoreFields());
+
+// 通用版:感受評分選擇器(點一下選取,再點一次取消選取)
+function wireFeelingPicker(pickerId, hiddenId, onChange){
+  document.getElementById(pickerId).addEventListener('click', (e)=>{
+    const btn = e.target.closest('.feeling-btn');
+    if(!btn) return;
+    const picker = document.getElementById(pickerId);
+    const hidden = document.getElementById(hiddenId);
+    const wasActive = btn.classList.contains('active');
+    picker.querySelectorAll('.feeling-btn').forEach(b=>b.classList.remove('active'));
+    hidden.value = wasActive ? '' : btn.dataset.value;
+    if(!wasActive) btn.classList.add('active');
+    if(onChange) onChange();
+  });
+}
+function setFeelingPickerValue(pickerId, hiddenId, value){
+  document.getElementById(hiddenId).value = value || '';
+  document.querySelectorAll('#'+pickerId+' .feeling-btn').forEach(b=>{
+    b.classList.toggle('active', value!=null && String(value)===b.dataset.value);
+  });
+}
+wireFeelingPicker('m_feelingPicker','m_feeling');
+wireFeelingPicker('d_feelingPicker','d_feeling', ()=>saveDetailCoreFields());
+
+function resetPlanForm(){
+  ['p_date','p_distance','p_tag','p_note','p_expectedPace','p_completedDate','p_sets','p_intervalDistance','p_intervalTime','p_intervalPace'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('p_intervalUnit').value = 'distance';
+  updateIntervalFieldsVisibility();
+  document.getElementById('p_intervalDistanceField').style.display = '';
+  document.getElementById('p_intervalTimeField').style.display = 'none';
+}
+
+let editingPlanId = null;
+function enterPlanEditMode(id){
+  const p = PLAN.find(x=>x.id===id);
+  if(!p) return;
+  editingPlanId = id;
+  document.getElementById('p_date').value = p.date;
+  document.getElementById('p_distance').value = p.distanceKm ?? '';
+  document.getElementById('p_tag').value = p.tag || '';
+  document.getElementById('p_note').value = p.note || '';
+  document.getElementById('p_expectedPace').value = p.expectedPaceSecPerKm ? formatPace(p.expectedPaceSecPerKm).replace(' /km','') : '';
+  document.getElementById('p_completedDate').value = p.completedDate || '';
+  if(p.intervals){
+    document.getElementById('p_sets').value = p.intervals.sets ?? '';
+    document.getElementById('p_intervalUnit').value = p.intervals.perUnit;
+    document.getElementById('p_intervalDistance').value = p.intervals.perDistanceM ?? '';
+    document.getElementById('p_intervalTime').value = p.intervals.perTimeSec ? formatDuration(p.intervals.perTimeSec) : '';
+    document.getElementById('p_intervalPace').value = p.intervals.paceSecPerKm ? formatPace(p.intervals.paceSecPerKm).replace(' /km','') : '';
+    document.getElementById('p_intervalDistanceField').style.display = p.intervals.perUnit==='time' ? 'none' : '';
+    document.getElementById('p_intervalTimeField').style.display = p.intervals.perUnit==='time' ? '' : 'none';
+  }else{
+    document.getElementById('p_sets').value = '';
+    document.getElementById('p_intervalDistance').value = '';
+    document.getElementById('p_intervalTime').value = '';
+    document.getElementById('p_intervalPace').value = '';
+  }
+  updateIntervalFieldsVisibility();
+  document.getElementById('addPlanBtn').textContent = '儲存修改';
+  document.getElementById('cancelPlanEditBtn').style.display = '';
+  document.getElementById('planMsg').className = 'msg';
+  document.getElementById('page-plan').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function exitPlanEditMode(){
+  editingPlanId = null;
+  document.getElementById('addPlanBtn').textContent = '加入計畫';
+  document.getElementById('cancelPlanEditBtn').style.display = 'none';
+  resetPlanForm();
+}
+document.getElementById('cancelPlanEditBtn').addEventListener('click', exitPlanEditMode);
+
+document.getElementById('addPlanBtn').addEventListener('click', ()=>{
+  const msg = document.getElementById('planMsg');
+  const date = document.getElementById('p_date').value;
+  if(!date){
+    msg.className = 'msg err';
+    msg.textContent = '請至少選擇日期。';
+    return;
+  }
+  const tag = document.getElementById('p_tag').value.trim() || null;
+  let intervals = null;
+  const isIntervalType = tag && (tag.includes('節奏') || tag.includes('間歇'));
+  const sets = parseFloat(document.getElementById('p_sets').value);
+  if(isIntervalType && sets>0){
+    const unit = document.getElementById('p_intervalUnit').value;
+    const perDistanceM = parseFloat(document.getElementById('p_intervalDistance').value) || null;
+    const perTimeSec = parseGarminTime(document.getElementById('p_intervalTime').value);
+    const paceSecPerKm = parseGarminTime(document.getElementById('p_intervalPace').value);
+    intervals = {
+      sets,
+      perUnit: unit,
+      perDistanceM: unit==='distance' ? perDistanceM : null,
+      perTimeSec: unit==='time' ? perTimeSec : null,
+      paceSecPerKm: paceSecPerKm || null
+    };
+  }
+  const expectedPaceSecPerKm = parseGarminTime(document.getElementById('p_expectedPace').value) || null;
+  const entry = {
+    date,
+    distanceKm: parseFloat(document.getElementById('p_distance').value) || null,
+    tag,
+    note: document.getElementById('p_note').value.trim() || null,
+    expectedPaceSecPerKm,
+    completedDate: document.getElementById('p_completedDate').value || null,
+    intervals
+  };
+
+  if(editingPlanId){
+    const p = PLAN.find(x=>x.id===editingPlanId);
+    if(p) Object.assign(p, entry);
+    savePlan(PLAN);
+    msg.className = 'msg ok';
+    msg.textContent = '已儲存修改。';
+    exitPlanEditMode();
+  }else{
+    PLAN.push(Object.assign({id: uid()}, entry));
+    savePlan(PLAN);
+    msg.className = 'msg ok';
+    msg.textContent = '已加入計畫。';
+    resetPlanForm();
+  }
+  renderPlanPage();
+});
+
+/* =========================================================
+   JSON 備份匯出/匯入
+   ========================================================= */
+function exportBackup(){
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    runs: RUNS,
+    shoes: SHOES,
+    goals: GOALS,
+    plan: PLAN
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `running-tracker-backup-${localISODate(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+document.getElementById('exportBtn').addEventListener('click', exportBackup);
+document.getElementById('importBtn').addEventListener('click', ()=>{
+  document.getElementById('importFileInput').click();
+});
+document.getElementById('importFileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      if(!confirm('匯入備份會把備份檔裡的資料合併進目前的紀錄(重複的跑步紀錄會自動略過),確定要繼續嗎?')){
+        document.getElementById('importFileInput').value = '';
+        return;
+      }
+      if(Array.isArray(data.shoes)){
+        data.shoes.forEach(s=>{ if(!SHOES.some(x=>x.id===s.id)) SHOES.push(s); });
+        saveShoes(SHOES);
+      }
+      if(Array.isArray(data.runs)) addRuns(data.runs);
+      if(Array.isArray(data.plan)){
+        data.plan.forEach(p=>{ if(!PLAN.some(x=>x.id===p.id)) PLAN.push(p); });
+        savePlan(PLAN);
+      }
+      if(data.goals && typeof data.goals==='object'){
+        GOALS = Object.assign({}, GOALS, data.goals);
+        saveGoals(GOALS);
+      }
+      refreshShoeSelects();
+      refreshTagDatalist();
+      renderDashboard();
+      renderHistory();
+      renderShoesPage();
+      renderPlanPage();
+      alert('備份還原完成。');
+    }catch(err){
+      alert('這個檔案看起來不是有效的備份檔:' + err.message);
+    }
+    document.getElementById('importFileInput').value = '';
+  };
+  reader.readAsText(file);
+});
+
+/* =========================================================
+   深色模式
+   ========================================================= */
+function applyDarkMode(on){
+  document.body.classList.toggle('dark-mode', on);
+  document.getElementById('darkModeBtn').textContent = on ? '☀️ 淺色模式' : '🌙 深色模式';
+}
+applyDarkMode(localStorage.getItem('runTracker.darkMode') === '1');
+document.getElementById('darkModeBtn').addEventListener('click', ()=>{
+  const on = !document.body.classList.contains('dark-mode');
+  applyDarkMode(on);
+  localStorage.setItem('runTracker.darkMode', on ? '1' : '0');
+});
+
+/* =========================================================
+   手動輸入
+   ========================================================= */
+document.getElementById('saveManualBtn').addEventListener('click', ()=>{
+  const msg = document.getElementById('manualMsg');
+  const date = document.getElementById('m_date').value;
+  const distance = parseFloat(document.getElementById('m_distance').value);
+  const durationSec = parseDurationToSeconds(
+    document.getElementById('m_h').value,
+    document.getElementById('m_m').value,
+    document.getElementById('m_s').value
+  );
+
+  if(!date || !distance || distance<=0 || durationSec<=0){
+    msg.className = 'msg err';
+    msg.textContent = '請至少填寫日期、距離(公里)與時間。';
+    return;
+  }
+
+  const tag = document.getElementById('m_tag').value.trim() || null;
+  let intervals = null;
+  const isIntervalType = tag && (tag.includes('節奏') || tag.includes('間歇'));
+  const sets = parseFloat(document.getElementById('m_sets').value);
+  if(isIntervalType && sets>0){
+    const unit = document.getElementById('m_intervalUnit').value;
+    intervals = {
+      sets,
+      perUnit: unit,
+      perDistanceM: unit==='distance' ? (parseFloat(document.getElementById('m_intervalDistance').value) || null) : null,
+      perTimeSec: unit==='time' ? parseGarminTime(document.getElementById('m_intervalTime').value) : null,
+      paceSecPerKm: parseGarminTime(document.getElementById('m_intervalPace').value) || null
+    };
+  }
+
+  const run = {
+    id: uid(),
+    date,
+    title: document.getElementById('m_title').value.trim() || null,
+    distanceKm: distance,
+    durationSec,
+    paceSecPerKm: durationSec/distance,
+    avgHr: parseFloat(document.getElementById('m_avgHr').value) || null,
+    maxHr: parseFloat(document.getElementById('m_maxHr').value) || null,
+    cadence: parseFloat(document.getElementById('m_cadence').value) || null,
+    shoeId: document.getElementById('m_shoe').value || null,
+    tag,
+    intervals,
+    feeling: parseFloat(document.getElementById('m_feeling').value) || null,
+    source: 'manual'
+  };
+  addRuns([run]);
+  refreshTagDatalist();
+  renderDashboard();
+  renderHistory();
+
+  msg.className = 'msg ok';
+  msg.textContent = '已儲存這筆跑步紀錄。';
+  ['m_date','m_distance','m_title','m_h','m_m','m_s','m_avgHr','m_maxHr','m_cadence','m_tag','m_sets','m_intervalDistance','m_intervalTime','m_intervalPace'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('m_shoe').value = '';
+  document.getElementById('m_intervalUnit').value = 'distance';
+  setFeelingPickerValue('m_feelingPicker','m_feeling', null);
+  updateManualIntervalVisibility();
+  document.getElementById('m_intervalDistanceField').style.display = '';
+  document.getElementById('m_intervalTimeField').style.display = 'none';
+});
+
+/* =========================================================
+   CSV 匯入
+   ========================================================= */
+const COLUMN_ALIASES = {
+  activityType: ['Activity Type','活動類型'],
+  date: ['Date','日期'],
+  title: ['Title','標題'],
+  distance: ['Distance','距離'],
+  time: ['Moving Time','移動時間','Time','時間'],
+  avgHr: ['Avg HR','Average HR','平均心率'],
+  maxHr: ['Max HR','最大心率','最高心率'],
+  cadence: ['Avg Run Cadence','Avg Cadence','平均步頻'],
+  calories: ['Calories','卡路里'],
+  elevGain: ['Total Ascent','總爬升'],
+  elevLoss: ['Total Descent','總下降'],
+  avgStride: ['Avg Stride Length','平均步幅'],
+  bestPace: ['Best Pace','最佳配速'],
+  trainingEffect: ['Aerobic TE','Aerobic Training Effect','有氧訓練效果'],
+  tss: ['Training Stress Score','Training Stress Score®']
+};
+function findColumn(headers, aliases){
+  for(const a of aliases){
+    const hit = headers.find(h => h.trim().toLowerCase() === a.toLowerCase());
+    if(hit) return hit;
+  }
+  // 模糊比對:包含關係
+  for(const a of aliases){
+    const hit = headers.find(h => h.toLowerCase().includes(a.toLowerCase()));
+    if(hit) return hit;
+  }
+  return null;
+}
+
+let pendingImport = [];
+
+function showImportMsg(kind, text){
+  const importMsg = document.getElementById('importMsg');
+  importMsg.className = 'msg ' + kind;
+  importMsg.textContent = text;
+}
+
+function handleCsvFile(file){
+  const importMsg = document.getElementById('importMsg');
+  importMsg.className = 'msg'; // 重置:交給 CSS class 控制顯示/隱藏,不要再用 inline style
+
+  if(typeof Papa === 'undefined'){
+    showImportMsg('err', '無法載入 CSV 解析功能。請確認這台電腦目前有連上網路,然後重新整理頁面再試一次(PapaParse / Chart.js 需要第一次連網下載)。');
+    return;
+  }
+
+  try{
+    Papa.parse(file, {
+    header:true,
+    skipEmptyLines:true,
+    complete: (results)=>{
+      const headers = results.meta.fields || [];
+      const col = {
+        activityType: findColumn(headers, COLUMN_ALIASES.activityType),
+        date: findColumn(headers, COLUMN_ALIASES.date),
+        title: findColumn(headers, COLUMN_ALIASES.title),
+        distance: findColumn(headers, COLUMN_ALIASES.distance),
+        time: findColumn(headers, COLUMN_ALIASES.time),
+        avgHr: findColumn(headers, COLUMN_ALIASES.avgHr),
+        maxHr: findColumn(headers, COLUMN_ALIASES.maxHr),
+        cadence: findColumn(headers, COLUMN_ALIASES.cadence),
+        calories: findColumn(headers, COLUMN_ALIASES.calories),
+        elevGain: findColumn(headers, COLUMN_ALIASES.elevGain),
+        elevLoss: findColumn(headers, COLUMN_ALIASES.elevLoss),
+        avgStride: findColumn(headers, COLUMN_ALIASES.avgStride),
+        bestPace: findColumn(headers, COLUMN_ALIASES.bestPace),
+        trainingEffect: findColumn(headers, COLUMN_ALIASES.trainingEffect),
+        tss: findColumn(headers, COLUMN_ALIASES.tss)
+      };
+
+      if(!col.date || !col.distance || !col.time){
+        importMsg.className = 'msg err';
+        importMsg.textContent = '找不到必要欄位(日期 / 距離 / 時間),請確認這是 Garmin Connect 匯出的 Activities.csv。';
+        return;
+      }
+
+      const unit = document.getElementById('csvUnit').value;
+      const onlyRunning = document.getElementById('onlyRunning').checked;
+      const RUN_KEYWORDS = ['run','跑步','跑','慢跑','trail','越野','treadmill','跑步機'];
+
+      const parsed = [];
+      let totalRows = 0, excludedByType = 0, excludedByParse = 0;
+
+      results.data.forEach(row=>{
+        totalRows++;
+        if(onlyRunning && col.activityType){
+          const type = (row[col.activityType]||'').toLowerCase();
+          const isRunning = type && RUN_KEYWORDS.some(kw => type.includes(kw));
+          if(type && !isRunning){ excludedByType++; return; }
+        }
+        const date = parseGarminDate(row[col.date]);
+        const distanceKm = parseGarminDistance(row[col.distance], unit);
+        const durationSec = parseGarminTime(row[col.time]);
+        if(!date || !distanceKm || !durationSec){ excludedByParse++; return; }
+
+        parsed.push({
+          id: uid(),
+          date,
+          title: col.title ? (row[col.title]||'').trim() || null : null,
+          distanceKm,
+          durationSec,
+          paceSecPerKm: durationSec/distanceKm,
+          avgHr: col.avgHr ? (parseFloat(row[col.avgHr]) || null) : null,
+          maxHr: col.maxHr ? (parseFloat(row[col.maxHr]) || null) : null,
+          cadence: col.cadence ? (parseFloat(row[col.cadence]) || null) : null,
+          calories: col.calories ? parseNum(row[col.calories]) : null,
+          elevGainM: col.elevGain ? parseGarminSmallMetric(row[col.elevGain], unit) : null,
+          elevLossM: col.elevLoss ? parseGarminSmallMetric(row[col.elevLoss], unit) : null,
+          avgStrideM: col.avgStride ? parseGarminSmallMetric(row[col.avgStride], unit) : null,
+          bestPaceSecPerKm: col.bestPace ? parseGarminPaceToSecPerKm(row[col.bestPace], unit) : null,
+          trainingEffect: col.trainingEffect ? parseNum(row[col.trainingEffect]) : null,
+          tss: col.tss ? parseNum(row[col.tss]) : null,
+          shoeId: null,
+          tag: null,
+          intervals: null,
+          feeling: null,
+          source: 'csv'
+        });
+      });
+
+      if(parsed.length===0){
+        showImportMsg('err',
+          `沒有找到可匯入的紀錄。共讀取 ${totalRows} 列;因活動類型判斷非跑步而排除 ${excludedByType} 列;`+
+          `因日期/距離/時間格式無法辨識而跳過 ${excludedByParse} 列。`+
+          (excludedByType>0 ? ' 可以試著取消勾選「只匯入跑步類活動」。' : '')+
+          (excludedByParse>0 ? ' 也請確認上方的距離單位是否選對(公里/英里)。' : '')
+        );
+        return;
+      }
+
+
+      pendingImport = parsed.sort((a,b)=> new Date(b.date)-new Date(a.date));
+      showPreview();
+    },
+    error: (err)=>{
+      showImportMsg('err', '讀取 CSV 時發生錯誤:' + err.message);
+    }
+    });
+  }catch(err){
+    showImportMsg('err', '解析 CSV 時發生未預期的錯誤:' + err.message);
+    console.error(err);
+  }
+}
+
+function showPreview(){
+  document.getElementById('previewArea').style.display = 'block';
+  document.getElementById('previewNote').textContent = `偵測到 ${pendingImport.length} 筆跑步活動,請確認資料是否正確:`;
+  document.getElementById('previewBody').innerHTML = pendingImport.slice(0,50).map(r=>`
+    <tr>
+      <td>${formatDate(r.date)}</td>
+      <td>${r.title || '—'}</td>
+      <td class="mono">${r.distanceKm.toFixed(2)}</td>
+      <td class="mono">${formatDuration(r.durationSec)}</td>
+      <td class="mono">${formatPace(r.paceSecPerKm)}</td>
+      <td class="mono">${r.avgHr ?? '—'}</td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('confirmImportBtn').addEventListener('click', ()=>{
+  const added = addRuns(pendingImport);
+  const importMsg = document.getElementById('importMsg');
+  importMsg.className = 'msg ok';
+  importMsg.textContent = `已匯入 ${added} 筆新紀錄(${pendingImport.length - added} 筆因重複而略過)。`;
+  document.getElementById('previewArea').style.display = 'none';
+  pendingImport = [];
+  document.getElementById('fileInput').value = '';
+  renderDashboard();
+  renderHistory();
+});
+document.getElementById('cancelImportBtn').addEventListener('click', ()=>{
+  pendingImport = [];
+  document.getElementById('previewArea').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+});
+
+document.getElementById('fileInput').addEventListener('change', (e)=>{
+  if(e.target.files[0]) handleCsvFile(e.target.files[0]);
+});
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e=>{
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if(e.dataTransfer.files[0]) handleCsvFile(e.dataTransfer.files[0]);
+});
+
+/* =========================================================
+   清除所有資料
+   ========================================================= */
+document.getElementById('wipeBtn').addEventListener('click', ()=>{
+  if(confirm('確定要清除所有跑步資料嗎?這個動作無法復原。')){
+    RUNS = [];
+    saveRuns(RUNS);
+    renderDashboard();
+    renderHistory();
+  }
+});
+
+/* =========================================================
+   初始化
+   ========================================================= */
+chartJsReady.finally(()=>{
+  if(typeof Papa === 'undefined' || typeof Chart === 'undefined'){
+    const missing = [];
+    if(typeof Papa === 'undefined') missing.push('CSV 解析(PapaParse)');
+    if(typeof Chart === 'undefined') missing.push('圖表(Chart.js)');
+    const banner = document.createElement('div');
+    banner.className = 'msg err';
+    banner.style.margin = '0 0 20px';
+    banner.textContent = `有部分功能未能載入:${missing.join('、')}。已嘗試多個來源仍失敗,通常是網路連線或防火牆/擴充功能擋掉了外部資源,請確認網路連線後重新整理頁面;手動輸入與歷史紀錄查看不受影響。`;
+    document.querySelector('main').prepend(banner);
+  }
+  refreshShoeSelects();
+  refreshTagDatalist();
+  renderDashboard();
+  renderHistory();
+});
+</script>
+</body>
+</html>
