@@ -466,14 +466,8 @@
         <div id="wRatingPicker" class="flex items-center mb-3"></div>
 
         <details class="mb-3 rounded-lg" style="background:rgba(15,27,45,0.04);">
-          <summary class="px-3 py-2 text-xs cursor-pointer opacity-70">更多屬性（用於評分，建議填寫）</summary>
-          <div class="px-3 pb-3 space-y-3">
-            <div><label class="block text-xs opacity-60 mb-1">色系</label><div id="wColorPicker" class="flex flex-wrap gap-1.5"></div></div>
-            <div><label class="block text-xs opacity-60 mb-1">花式</label><div id="wPatternPicker" class="flex flex-wrap gap-1.5"></div></div>
-            <div><label class="block text-xs opacity-60 mb-1">材質</label><div id="wMaterialPicker" class="flex flex-wrap gap-1.5"></div></div>
-            <div><label class="block text-xs opacity-60 mb-1">適穿季節</label><div id="wSeasonPicker" class="flex flex-wrap gap-1.5"></div></div>
-            <div><label class="block text-xs opacity-60 mb-1">風格</label><div id="wStylePicker" class="flex flex-wrap gap-1.5"></div></div>
-          </div>
+          <summary class="px-3 py-2 text-xs cursor-pointer opacity-70">更多屬性（依類別顯示，用於評分，建議填寫）</summary>
+          <div id="wAttrPanel" class="px-3 pb-3 space-y-3"></div>
         </details>
 
         <div class="grid grid-cols-2 gap-3 mb-4">
@@ -1825,7 +1819,7 @@
         wardrobe = parsed.wardrobe;
         saveWardrobe(wardrobe);
       }
-      if(parsed.scoreSettings && parsed.scoreSettings.weights){
+      if(parsed.scoreSettings && (parsed.scoreSettings.kinds || parsed.scoreSettings.weights)){
         scoreSettings = normalizeScoreSettings(parsed.scoreSettings);
         saveScoreSettings();
         renderScoreSettings();
@@ -1837,6 +1831,9 @@
         customOptions.styles = merge(customOptions.styles, co.styles);
         customOptions.materials = merge(customOptions.materials, co.materials);
         customOptions.patterns = merge(customOptions.patterns, co.patterns);
+        ['shoes', 'bag', 'jewelry'].forEach(k => {
+          customOptions.types[k] = merge(customOptions.types[k], co.types && co.types[k]);
+        });
         (Array.isArray(co.colors) ? co.colors : []).forEach(c => {
           if(c && c.name && c.hex && !customOptions.colors.some(x => x.name === c.name)) customOptions.colors.push(c);
         });
@@ -2322,7 +2319,7 @@
   const wNote = document.getElementById('wNote');
 
   let wSelectedCategories = ['其他'];
-  renderTagPicker('wCategoryPicker', wSelectedCategories, refreshWishMaterialPicker);
+  renderTagPicker('wCategoryPicker', wSelectedCategories, refreshWishAttrPanel);
   const wOrigin = { value: 'local' };
   renderOriginPicker('wOriginPicker', wOrigin);
 
@@ -2334,11 +2331,7 @@
       categories: wSelectedCategories.length ? [...wSelectedCategories] : ['其他'],
       origin: wOrigin.value,
       rating: wRating.value,
-      colors: [...wColors],
-      patterns: [...wPatterns],
-      materials: [...wMaterials],
-      seasons: [...wSeasons],
-      styles: [...wStyles],
+      ...attrStateToFields(wAttr, kindOfCategories(wSelectedCategories)),
       price: wPrice.value ? parseFloat(wPrice.value) : null,
       note: wNote.value.trim(),
       addedDate: new Date().toISOString().slice(0,10),
@@ -2351,18 +2344,13 @@
 
     wName.value = '';
     wSelectedCategories = ['其他'];
-    renderTagPicker('wCategoryPicker', wSelectedCategories, refreshWishMaterialPicker);
+    renderTagPicker('wCategoryPicker', wSelectedCategories, refreshWishAttrPanel);
     wOrigin.value = 'local';
     renderOriginPicker('wOriginPicker', wOrigin);
     wRating.value = 0;
     renderStarPicker('wRatingPicker', wRating);
-    [wColors, wPatterns, wMaterials, wSeasons, wStyles].forEach(a => { a.length = 0; });
-    renderChipPicker('wColorPicker', colorOptions, wColors, COLOR_ADD);
-  renderChipPicker('wPatternPicker', patternOptions, wPatterns, PATTERN_ADD);
-    renderChipPicker('wPatternPicker', patternOptions, wPatterns, PATTERN_ADD);
-    refreshWishMaterialPicker();
-    renderChipPicker('wSeasonPicker', toOptions(SEASON_OPTIONS), wSeasons);
-    renderChipPicker('wStylePicker', styleOptions, wStyles, STYLE_ADD);
+    Object.assign(wAttr, newAttrState());
+    refreshWishAttrPanel();
     wPrice.value = '';
     wNote.value = '';
 
@@ -2413,11 +2401,7 @@
     let editWishCategories = Array.isArray(item.categories) && item.categories.length ? [...item.categories] : [item.category || '其他'];
     const editWishOrigin = { value: item.origin === 'import' ? 'import' : 'local' };
     const editWishRating = { value: item.rating || 0 };
-    const editWishColors = [...(item.colors || [])];
-    const editWishPatterns = [...(item.patterns || [])];
-    const editWishMaterials = [...(item.materials || [])];
-    const editWishSeasons = [...(item.seasons || [])];
-    const editWishStyles = [...(item.styles || [])];
+    const editWishAttr = attrStateFromItem(item);
 
     detailModalContent.innerHTML = `
       <div class="tag-hole"></div>
@@ -2440,26 +2424,7 @@
           <label class="block text-xs opacity-60 mb-1">喜愛度</label>
           <div id="editWishRatingPicker" class="flex items-center"></div>
         </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">色系（用於評分）</label>
-          <div id="editWishColorPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">花式</label>
-          <div id="editWishPatternPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">材質</label>
-          <div id="editWishMaterialPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">適穿季節</label>
-          <div id="editWishSeasonPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">風格</label>
-          <div id="editWishStylePicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
+        <div id="editWishAttrPanel" class="space-y-3"></div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs opacity-60 mb-1">預估金額</label>
@@ -2478,15 +2443,11 @@
       </div>
     `;
     detailModal.classList.remove('hidden');
-    const refreshEditWishMat = () => renderChipPicker('editWishMaterialPicker', () => materialOptionsFor(editWishCategories), editWishMaterials, MATERIAL_ADD);
-    renderTagPicker('editWishCategoryPicker', editWishCategories, refreshEditWishMat);
+    const refreshEditWishAttr = () => renderAttrPanel('editWishAttrPanel', 'editWish', () => editWishCategories, editWishAttr);
+    renderTagPicker('editWishCategoryPicker', editWishCategories, refreshEditWishAttr);
     renderOriginPicker('editWishOriginPicker', editWishOrigin);
     renderStarPicker('editWishRatingPicker', editWishRating);
-    renderChipPicker('editWishColorPicker', colorOptions, editWishColors, COLOR_ADD);
-    renderChipPicker('editWishPatternPicker', patternOptions, editWishPatterns, PATTERN_ADD);
-    refreshEditWishMat();
-    renderChipPicker('editWishSeasonPicker', toOptions(SEASON_OPTIONS), editWishSeasons);
-    renderChipPicker('editWishStylePicker', styleOptions, editWishStyles, STYLE_ADD);
+    refreshEditWishAttr();
 
     document.getElementById('editWishCancelBtn').addEventListener('click', closeDetail);
     document.getElementById('editWishSaveBtn').addEventListener('click', ()=>{
@@ -2503,11 +2464,7 @@
         categories: editWishCategories.length ? [...editWishCategories] : ['其他'],
         origin: editWishOrigin.value,
         rating: editWishRating.value,
-        colors: [...editWishColors],
-        patterns: [...editWishPatterns],
-        materials: [...editWishMaterials],
-        seasons: [...editWishSeasons],
-        styles: [...editWishStyles],
+        ...attrStateToFields(editWishAttr, kindOfCategories(editWishCategories)),
         price: priceVal ? parseFloat(priceVal) : null,
         note,
       };
@@ -2595,7 +2552,7 @@
             ${wishlistSelectMode ? `<input type="checkbox" class="selChkWish shrink-0 mt-0.5 w-4 h-4" data-id="${item.id}" ${wishlistSelectedIds.has(item.id) ? 'checked' : ''}>` : ''}
             <div class="min-w-0">
               <p class="text-sm font-semibold truncate">${escapeHtml(item.name)}</p>
-              <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(wishlistCategoryLabel(item))}${item.origin === 'import' ? ' ・ 🌏進口' : ''}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
+              <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml(wishlistCategoryLabel(item))}${(item.types && item.types.length) ? ' ・ ' + escapeHtml(item.types.join('、')) : ''}${item.origin === 'import' ? ' ・ 🌏進口' : ''}${item.price ? ' ・ ' + fmtMoney(item.price) : ''}</p>
               ${item.note ? (isUrl(item.note)
                 ? `<a href="${escapeHtml(item.note)}" target="_blank" rel="noopener" class="text-xs underline mt-1 inline-block" style="color:var(--rust);">🔗 查看連結</a>`
                 : `<p class="text-xs opacity-60 mt-1">${escapeHtml(item.note)}</p>`) : ''}
@@ -2662,7 +2619,7 @@
     { name:'黑', hex:'#1a1a1a' }, { name:'白', hex:'#f7f7f4' }, { name:'灰', hex:'#9aa0a6' },
     { name:'米/卡其', hex:'#d6c3a1' }, { name:'棕', hex:'#8b5e3c' }, { name:'藍', hex:'#3b5b92' },
     { name:'綠', hex:'#5f7050' }, { name:'紅/酒紅', hex:'#a23b3b' }, { name:'粉', hex:'#e8b4c0' },
-    { name:'黃/橘', hex:'#e0a030' }, { name:'紫', hex:'#7a5a9a' },
+    { name:'黃/橘', hex:'#e0a030' }, { name:'紫', hex:'#7a5a9a' }, { name:'金', hex:'#d4af37' }, { name:'銀', hex:'#c0c0c0' },
     { name:'多色/花紋', hex:'conic-gradient(#a23b3b,#e0a030,#5f7050,#3b5b92,#a23b3b)' },
   ];
   // 材質依類別分組：鞋子、包包、飾品/配件的材質跟衣物差很多，選了類別就只顯示相關的材質
@@ -2671,8 +2628,9 @@
     shoes:     ['皮革','麂皮/絨面','帆布','網布','針織鞋面','尼龍','防水機能布','合成皮','橡膠'],
     bag:       ['帆布','尼龍','皮革','合成皮','棉','防水機能布'],
     accessory: ['金屬','銀','不鏽鋼','皮革','橡膠/矽膠','木'],
+    jewelry:   ['銀','金','金屬','不鏽鋼','鈦','珍珠','天然石','玻璃','陶瓷','樹脂','皮革','橡膠/矽膠','木'],
   };
-  const CATEGORY_MATERIAL_GROUP = { '鞋子':'shoes', '包包':'bag', '飾品':'accessory', '配件':'accessory' };
+  const CATEGORY_MATERIAL_GROUP = { '鞋子':'shoes', '包包':'bag', '飾品':'jewelry', '配件':'accessory' };
   const BASE_MATERIALS = [...new Set(Object.values(MATERIAL_GROUPS).flat())];
   const MATERIAL_OPTIONS = [...BASE_MATERIALS, '其他'];
   const SEASON_OPTIONS = ['春','夏','秋','冬'];
@@ -2689,8 +2647,13 @@
         materials: Array.isArray(o && o.materials) ? o.materials : [],
         patterns: Array.isArray(o && o.patterns) ? o.patterns : [],
         colors: Array.isArray(o && o.colors) ? o.colors.filter(c => c && c.name && c.hex) : [],
+        types: {
+          shoes: Array.isArray(o && o.types && o.types.shoes) ? o.types.shoes : [],
+          bag: Array.isArray(o && o.types && o.types.bag) ? o.types.bag : [],
+          jewelry: Array.isArray(o && o.types && o.types.jewelry) ? o.types.jewelry : [],
+        },
       };
-    }catch(e){ return { styles: [], materials: [], patterns: [], colors: [] }; }
+    }catch(e){ return { styles: [], materials: [], patterns: [], colors: [], types: { shoes: [], bag: [], jewelry: [] } }; }
   }
   let customOptions = loadCustomOptions();
   function saveCustomOptions(){ localStorage.setItem(CUSTOM_OPTIONS_KEY, JSON.stringify(customOptions)); }
@@ -2706,7 +2669,7 @@
     const groups = new Set(real.map(c => CATEGORY_MATERIAL_GROUP[c] || 'garment'));
     if(!groups.size) groups.add('garment');
     const list = [];
-    ['garment', 'shoes', 'bag', 'accessory'].forEach(g => {
+    ['garment', 'shoes', 'bag', 'accessory', 'jewelry'].forEach(g => {
       if(groups.has(g)) MATERIAL_GROUPS[g].forEach(m => { if(!list.includes(m)) list.push(m); });
     });
     customOptions.materials.forEach(m => { if(!list.includes(m)) list.push(m); });
@@ -2752,21 +2715,25 @@
   // 通用多選標籤：optionsOrFn 可以是陣列或回傳陣列的函式（每次渲染重新取），
   // 選項可為字串或 {value,label,hex}；extra 有值時最後會多一顆「＋ 自訂」（extra.type==='color' 時是行內輸入名稱＋選顏色）。
   // selectedArr 會被直接修改
-  function renderChipPicker(containerId, optionsOrFn, selectedArr, extra){
+  function renderChipPicker(containerId, optionsOrFn, selectedArr, extra, opts){
     const container = document.getElementById(containerId);
     let adding = false;
+    function setSelected(v){
+      if(opts && opts.single){ selectedArr.length = 0; selectedArr.push(v); }
+      else if(!selectedArr.includes(v)) selectedArr.push(v);
+    }
     function build(){
       const raw = typeof optionsOrFn === 'function' ? optionsOrFn() : optionsOrFn;
-      const opts = raw.map(o => typeof o === 'string' ? { value: o, label: o } : o);
+      const optList = raw.map(o => typeof o === 'string' ? { value: o, label: o } : o);
       // 已選的值就算不在目前選項裡也要保留顯示（例如換類別後原本選的材質）
-      selectedArr.forEach(v => { if(!opts.some(o => o.value === v)) opts.push({ value: v, label: v }); });
+      selectedArr.forEach(v => { if(!optList.some(o => o.value === v)) optList.push({ value: v, label: v }); });
       let addHtml = '';
       if(extra){
         addHtml = (extra.type === 'color' && adding)
           ? `<span class="inline-flex items-center gap-1.5 flex-wrap"><input type="text" class="chipAddName px-2 py-1 rounded-lg text-xs" placeholder="顏色名稱" style="width:6.5rem;background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.2);"><input type="color" class="chipAddHex" value="#888888" style="width:2rem;height:1.8rem;border:none;background:none;padding:0;"><button type="button" class="chipAddOk btn-press px-2.5 py-1.5 rounded-full text-xs" style="background:var(--sage);color:var(--ink);">加入</button><button type="button" class="chipAddCancel text-xs underline opacity-60">取消</button></span>`
           : `<button type="button" class="chipAdd btn-press px-2.5 py-1.5 rounded-full text-xs" style="border:1px dashed rgba(15,27,45,0.35); color:rgba(15,27,45,0.65);">${escapeHtml(extra.label)}</button>`;
       }
-      container.innerHTML = opts.map(o =>
+      container.innerHTML = optList.map(o =>
         `<button type="button" class="chip btn-press px-2.5 py-1.5 rounded-full text-xs inline-flex items-center gap-1.5" data-val="${escapeHtml(o.value)}">${o.hex ? colorDotHtml(o.value, 11) : ''}${escapeHtml(o.label)}</button>`
       ).join('') + addHtml;
       function paint(){
@@ -2781,7 +2748,12 @@
         btn.addEventListener('click', ()=>{
           const v = btn.dataset.val;
           const i = selectedArr.indexOf(v);
-          if(i === -1) selectedArr.push(v); else selectedArr.splice(i, 1);
+          if(opts && opts.single){
+            selectedArr.length = 0;
+            if(i === -1) selectedArr.push(v);
+          }else{
+            if(i === -1) selectedArr.push(v); else selectedArr.splice(i, 1);
+          }
           paint();
         });
       });
@@ -2792,7 +2764,7 @@
           const name = (prompt(extra.prompt) || '').trim();
           if(!name) return;
           extra.onAdd(name);
-          if(!selectedArr.includes(name)) selectedArr.push(name);
+          setSelected(name);
           build();
         });
       }
@@ -2803,7 +2775,7 @@
           const hex = container.querySelector('.chipAddHex').value;
           if(!name){ alert('請輸入顏色名稱'); return; }
           extra.onAdd(name, hex);
-          if(!selectedArr.includes(name)) selectedArr.push(name);
+          setSelected(name);
           adding = false;
           build();
         });
@@ -2814,16 +2786,129 @@
     build();
   }
 
-  // 還沒標完整的欄位（評分比對需要色系、材質、花式）
+  // 還沒標完整的欄位：衣物看色系、材質、花式；鞋子／包包／飾品看色系、材質、類型
   function wardrobeMissingLabels(it){
+    const has = k => it[k] && it[k].length;
     const m = [];
-    if(!(it.colors && it.colors.length)) m.push('色系');
-    if(!(it.materials && it.materials.length)) m.push('材質');
-    if(!(it.patterns && it.patterns.length)) m.push('花式');
+    if(!has('colors')) m.push('色系');
+    if(!has('materials')) m.push('材質');
+    if(itemKind(it) === 'apparel'){ if(!has('patterns')) m.push('花式'); }
+    else if(!has('types')) m.push('類型');
     return m;
   }
   function wardrobeItemUntagged(it){
     return wardrobeMissingLabels(it).length > 0;
+  }
+
+  // ---------- 單品種類：衣物／鞋子／包包／飾品，各自有不同的屬性與評分標準 ----------
+  const KIND_CONFIG = {
+    apparel: { label:'衣物', unit:'件', fields:['colors','patterns','materials','seasons','styles'] },
+    shoes:   { label:'鞋子', unit:'雙', fields:['colors','types','materials','styles'], mainSub:true },
+    bag:     { label:'包包', unit:'個', fields:['colors','types','materials','styles'] },
+    jewelry: { label:'飾品', unit:'件', fields:['colors','types','materials'] },
+  };
+  const KIND_ORDER = ['apparel', 'shoes', 'bag', 'jewelry'];
+  function categoriesOf(item){
+    return Array.isArray(item.categories) && item.categories.length ? item.categories : (item.category ? [item.category] : []);
+  }
+  function kindOfCategories(cats){
+    if(cats.includes('鞋子')) return 'shoes';
+    if(cats.includes('包包')) return 'bag';
+    if(cats.includes('飾品')) return 'jewelry';
+    return 'apparel';
+  }
+  function itemKind(item){ return kindOfCategories(categoriesOf(item)); }
+
+  const TYPE_BASE = {
+    shoes:   ['跑鞋','復古跑鞋','老爹鞋','休閒球鞋','帆布鞋','板鞋','籃球鞋','登山鞋','越野跑鞋','靴子','皮鞋/樂福鞋','涼鞋/拖鞋'],
+    bag:     ['托特包','斜背包','雙肩包','腰包/胸包','肩背包','手提包','郵差包','水桶包','錢包/卡夾'],
+    jewelry: ['手鍊','項鍊','戒指','耳環','胸針','髮飾','手錶','腳鍊'],
+  };
+  function typeOptions(kind){
+    const custom = (customOptions.types && customOptions.types[kind]) || [];
+    return [...TYPE_BASE[kind], ...custom.filter(x => !TYPE_BASE[kind].includes(x))];
+  }
+  const TYPE_ADD_CACHE = {};
+  function typeAdd(kind){
+    if(!TYPE_ADD_CACHE[kind]){
+      TYPE_ADD_CACHE[kind] = { label:'＋ 自訂', prompt:`輸入自訂${KIND_CONFIG[kind].label}類型名稱`, onAdd: name => {
+        if(!customOptions.types[kind]) customOptions.types[kind] = [];
+        if(!TYPE_BASE[kind].includes(name) && !customOptions.types[kind].includes(name)){
+          customOptions.types[kind].push(name);
+          saveCustomOptions();
+        }
+      } };
+    }
+    return TYPE_ADD_CACHE[kind];
+  }
+
+  // 屬性狀態：表單裡暫存所有可能的欄位；鞋子的色系分成主色（單選）與副色
+  function newAttrState(){
+    return { colors:[], colorMain:[], colorSubs:[], patterns:[], materials:[], seasons:[], styles:[], types:[] };
+  }
+  function attrStateFromItem(it){
+    const st = newAttrState();
+    if(!it) return st;
+    const cols = [...(it.colors || [])];
+    if(itemKind(it) === 'shoes'){ st.colorMain = cols.slice(0, 1); st.colorSubs = cols.slice(1); }
+    else st.colors = cols;
+    ['patterns','materials','seasons','styles','types'].forEach(k => { st[k] = [...(it[k] || [])]; });
+    return st;
+  }
+  // 只留下這個種類用得到的欄位，其他一律清空，避免殘留資料影響評分
+  function attrStateToFields(st, kind){
+    const cfg = KIND_CONFIG[kind];
+    const f = { colors:[], patterns:[], materials:[], seasons:[], styles:[], types:[] };
+    if(cfg.fields.includes('colors')){
+      f.colors = cfg.mainSub ? [...st.colorMain, ...st.colorSubs.filter(c => !st.colorMain.includes(c))] : [...st.colors];
+    }
+    ['patterns','materials','seasons','styles','types'].forEach(k => { if(cfg.fields.includes(k)) f[k] = [...st[k]]; });
+    return f;
+  }
+  // 換種類時，把色系在「一般」與「主色／副色」之間轉換
+  function syncColorState(st, kind){
+    if(KIND_CONFIG[kind].mainSub){
+      if(!st.colorMain.length && !st.colorSubs.length && st.colors.length){
+        st.colorMain.push(st.colors[0]);
+        st.colors.slice(1).forEach(c => st.colorSubs.push(c));
+        st.colors.length = 0;
+      }
+    }else if(st.colorMain.length || st.colorSubs.length){
+      [...st.colorMain, ...st.colorSubs].forEach(c => { if(!st.colors.includes(c)) st.colors.push(c); });
+      st.colorMain.length = 0;
+      st.colorSubs.length = 0;
+    }
+  }
+  // 依目前選到的類別（→種類）渲染對應的屬性欄位；getCategories 回傳目前的類別陣列。類別一變就重新呼叫即可
+  function renderAttrPanel(containerId, prefix, getCategories, st){
+    const container = document.getElementById(containerId);
+    const cats = getCategories();
+    const kind = kindOfCategories(cats);
+    const cfg = KIND_CONFIG[kind];
+    syncColorState(st, kind);
+    const block = (label, id) => `<div><label class="block text-xs opacity-60 mb-1">${label}</label><div id="${prefix}${id}" class="flex flex-wrap gap-1.5"></div></div>`;
+    let html = '';
+    if(cfg.mainSub) html += block('主色（單選）', 'ColorMainPicker') + block('副色（選填，可複選）', 'ColorSubPicker');
+    else html += block('色系（可複選）', 'ColorPicker');
+    if(cfg.fields.includes('types')) html += block(`${cfg.label}類型`, 'TypePicker');
+    if(cfg.fields.includes('patterns')) html += block('花式（可複選）', 'PatternPicker');
+    if(cfg.fields.includes('materials')) html += block('材質（可複選）', 'MaterialPicker');
+    if(cfg.fields.includes('seasons')) html += block('適穿季節', 'SeasonPicker');
+    if(cfg.fields.includes('styles')) html += block('風格', 'StylePicker');
+    container.innerHTML = html;
+
+    if(cfg.mainSub){
+      renderChipPicker(prefix + 'ColorMainPicker', colorOptions, st.colorMain, COLOR_ADD, { single: true });
+      renderChipPicker(prefix + 'ColorSubPicker', colorOptions, st.colorSubs, COLOR_ADD);
+    }else{
+      renderChipPicker(prefix + 'ColorPicker', colorOptions, st.colors, COLOR_ADD);
+    }
+    if(cfg.fields.includes('types')) renderChipPicker(prefix + 'TypePicker', () => typeOptions(kind), st.types, typeAdd(kind));
+    if(cfg.fields.includes('patterns')) renderChipPicker(prefix + 'PatternPicker', patternOptions, st.patterns, PATTERN_ADD);
+    if(cfg.fields.includes('materials')) renderChipPicker(prefix + 'MaterialPicker', () => materialOptionsFor(cats), st.materials, MATERIAL_ADD);
+    if(cfg.fields.includes('seasons')) renderChipPicker(prefix + 'SeasonPicker', toOptions(SEASON_OPTIONS), st.seasons);
+    if(cfg.fields.includes('styles')) renderChipPicker(prefix + 'StylePicker', styleOptions, st.styles, STYLE_ADD);
+    return kind;
   }
 
   // 加入／編輯單品（共用同一個表單）
@@ -2831,12 +2916,8 @@
     const existing = itemId ? wardrobe.find(w => w.id === itemId) : null;
     const sel = {
       categories: existing && existing.categories && existing.categories.length ? [...existing.categories] : ['其他'],
-      colors: existing ? [...(existing.colors || [])] : [],
-      patterns: existing ? [...(existing.patterns || [])] : [],
-      materials: existing ? [...(existing.materials || [])] : [],
-      seasons: existing ? [...(existing.seasons || [])] : [],
-      styles: existing ? [...(existing.styles || [])] : [],
     };
+    const attr = attrStateFromItem(existing);
     const origin = { value: existing && existing.origin === 'import' ? 'import' : 'local' };
     const rating = { value: existing ? (existing.rating || 0) : 0 };
     const inputStyle = 'background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);';
@@ -2861,26 +2942,7 @@
           <label class="block text-xs opacity-60 mb-1">購買來源</label>
           <div id="wdOriginPicker" class="flex gap-2"></div>
         </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">色系（可複選）</label>
-          <div id="wdColorPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">花式（可複選）</label>
-          <div id="wdPatternPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">材質（可複選）</label>
-          <div id="wdMaterialPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">適穿季節</label>
-          <div id="wdSeasonPicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">風格</label>
-          <div id="wdStylePicker" class="flex flex-wrap gap-1.5"></div>
-        </div>
+        <div id="wdAttrPanel" class="space-y-3"></div>
         <div>
           <label class="block text-xs opacity-60 mb-1">喜愛度（選填）</label>
           <div id="wdRatingPicker" class="flex items-center"></div>
@@ -2897,14 +2959,10 @@
       </div>
     `;
     detailModal.classList.remove('hidden');
-    const refreshWdMat = () => renderChipPicker('wdMaterialPicker', () => materialOptionsFor(sel.categories), sel.materials, MATERIAL_ADD);
-    renderTagPicker('wdCategoryPicker', sel.categories, refreshWdMat);
+    const refreshWdAttr = () => renderAttrPanel('wdAttrPanel', 'wd', () => sel.categories, attr);
+    renderTagPicker('wdCategoryPicker', sel.categories, refreshWdAttr);
     renderOriginPicker('wdOriginPicker', origin);
-    renderChipPicker('wdColorPicker', colorOptions, sel.colors, COLOR_ADD);
-    renderChipPicker('wdPatternPicker', patternOptions, sel.patterns, PATTERN_ADD);
-    refreshWdMat();
-    renderChipPicker('wdSeasonPicker', toOptions(SEASON_OPTIONS), sel.seasons);
-    renderChipPicker('wdStylePicker', styleOptions, sel.styles, STYLE_ADD);
+    refreshWdAttr();
     renderStarPicker('wdRatingPicker', rating);
 
     document.getElementById('wdCancelBtn').addEventListener('click', closeDetail);
@@ -2918,11 +2976,7 @@
         brand: document.getElementById('wdBrand').value.trim(),
         categories: sel.categories.length ? [...sel.categories] : ['其他'],
         origin: origin.value,
-        colors: [...sel.colors],
-        patterns: [...sel.patterns],
-        materials: [...sel.materials],
-        seasons: [...sel.seasons],
-        styles: [...sel.styles],
+        ...attrStateToFields(attr, kindOfCategories(sel.categories)),
         rating: rating.value,
         note: document.getElementById('wdNote').value.trim(),
       };
@@ -2994,6 +3048,7 @@
         const idx = wardrobe.findIndex(w => w.id === id);
         if(idx === -1) return;
         const today = new Date().toISOString().slice(0, 10);
+        const copyNow = r => copyAttrs && kindOfCategories([r.category]) === itemKind(it);
         // 第 1 列：保留原本單品
         wardrobe[idx] = {
           ...wardrobe[idx],
@@ -3008,10 +3063,12 @@
             brand: it.brand || '',
             categories: [r.category],
             origin: it.origin === 'import' ? 'import' : 'local',
-            colors: copyAttrs ? [...(it.colors || [])] : [],
-            materials: copyAttrs ? [...(it.materials || [])] : [],
-            seasons: copyAttrs ? [...(it.seasons || [])] : [],
-            styles: copyAttrs ? [...(it.styles || [])] : [],
+            colors: copyNow(r) ? [...(it.colors || [])] : [],
+            patterns: copyNow(r) ? [...(it.patterns || [])] : [],
+            materials: copyNow(r) ? [...(it.materials || [])] : [],
+            seasons: copyNow(r) ? [...(it.seasons || [])] : [],
+            styles: copyNow(r) ? [...(it.styles || [])] : [],
+            types: copyNow(r) ? [...(it.types || [])] : [],
             rating: 0,
             note: '',
             splitFrom: it.id,
@@ -3115,47 +3172,61 @@
     });
   }
 
-  // 批次標記：把選好的色系／材質／季節／風格「加到」已選單品上（不會移除原有標記）
+  // 批次標記：把選好的標記「加到」已選單品上（不會移除原有標記）。屬性欄位依種類不同，所以一次只能標同一種類
   function openWardrobeBulkTag(){
     if(wardrobeSelectedIds.size === 0) return;
-    const sel = { colors: [], patterns: [], materials: [], seasons: [], styles: [] };
+    const items = wardrobe.filter(it => wardrobeSelectedIds.has(it.id));
+    const kinds = [...new Set(items.map(itemKind))];
+    if(kinds.length > 1){
+      alert(`已選的單品包含不同種類（${kinds.map(k => KIND_CONFIG[k].label).join('、')}），屬性欄位不同。請先用類別篩選，一次只標記同一種類。`);
+      return;
+    }
+    const kind = kinds[0];
+    const cfg = KIND_CONFIG[kind];
+    const cats = [...new Set(items.flatMap(it => categoriesOf(it)))];
+    const st = newAttrState();
     detailModalContent.innerHTML = `
       <div class="tag-hole"></div>
-      <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">批次標記</p>
-      <p class="text-xs opacity-60 mb-3 leading-relaxed">會把下面選的標記加到已選的 ${wardrobeSelectedIds.size} 件單品上，原本的標記不會被移除。</p>
-      <div class="space-y-3 text-sm">
-        <div><label class="block text-xs opacity-60 mb-1">色系</label><div id="wbColorPicker" class="flex flex-wrap gap-1.5"></div></div>
-        <div><label class="block text-xs opacity-60 mb-1">花式</label><div id="wbPatternPicker" class="flex flex-wrap gap-1.5"></div></div>
-        <div><label class="block text-xs opacity-60 mb-1">材質</label><div id="wbMaterialPicker" class="flex flex-wrap gap-1.5"></div></div>
-        <div><label class="block text-xs opacity-60 mb-1">適穿季節</label><div id="wbSeasonPicker" class="flex flex-wrap gap-1.5"></div></div>
-        <div><label class="block text-xs opacity-60 mb-1">風格</label><div id="wbStylePicker" class="flex flex-wrap gap-1.5"></div></div>
-      </div>
+      <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">批次標記（${cfg.label}）</p>
+      <p class="text-xs opacity-60 mb-3 leading-relaxed">會把下面選的標記加到已選的 ${items.length} 件單品上，原本的標記不會被移除。${cfg.mainSub ? '鞋子的主色只會補在還沒有色系的單品上，副色則是加上去。' : ''}</p>
+      <div id="wbAttrPanel" class="space-y-3 text-sm"></div>
       <div class="flex gap-2 mt-5">
         <button id="wbApplyBtn" type="button" class="btn-press flex-1 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--sage); color:var(--ink);">套用</button>
         <button id="wbCancelBtn" type="button" class="btn-press px-4 py-3 rounded-lg font-display tracking-wide text-sm" style="background:rgba(15,27,45,0.08); color:var(--ink);">取消</button>
       </div>
     `;
     detailModal.classList.remove('hidden');
-    renderChipPicker('wbColorPicker', colorOptions, sel.colors, COLOR_ADD);
-    renderChipPicker('wbPatternPicker', patternOptions, sel.patterns, PATTERN_ADD);
-    const bulkCats = [...new Set(wardrobe.filter(it => wardrobeSelectedIds.has(it.id)).flatMap(it => it.categories || []))];
-    renderChipPicker('wbMaterialPicker', () => materialOptionsFor(bulkCats), sel.materials, MATERIAL_ADD);
-    renderChipPicker('wbSeasonPicker', toOptions(SEASON_OPTIONS), sel.seasons);
-    renderChipPicker('wbStylePicker', styleOptions, sel.styles, STYLE_ADD);
+    renderAttrPanel('wbAttrPanel', 'wb', () => cats, st);
 
     document.getElementById('wbCancelBtn').addEventListener('click', closeDetail);
     document.getElementById('wbApplyBtn').addEventListener('click', ()=>{
-      if(!sel.colors.length && !sel.patterns.length && !sel.materials.length && !sel.seasons.length && !sel.styles.length){
+      const add = attrStateToFields(st, kind);
+      if(!Object.values(add).some(a => a.length)){
         alert('請至少選一個要加上的標記');
         return;
       }
-      const n = wardrobeSelectedIds.size;
+      const n = items.length;
       wardrobe.forEach(it => {
         if(!wardrobeSelectedIds.has(it.id)) return;
-        ['colors', 'patterns', 'materials', 'seasons', 'styles'].forEach(k => {
+        ['patterns', 'materials', 'seasons', 'styles', 'types'].forEach(k => {
+          if(!add[k].length) return;
           const cur = Array.isArray(it[k]) ? it[k] : [];
-          it[k] = [...new Set([...cur, ...sel[k]])];
+          it[k] = [...new Set([...cur, ...add[k]])];
         });
+        if(add.colors.length){
+          const cur = it.colors || [];
+          if(cfg.mainSub){
+            // 鞋子：所選主色只補在還沒有主色的單品上；所選副色一律加上去
+            let main = cur[0];
+            const subs = cur.slice(1);
+            if(!main && st.colorMain[0]) main = st.colorMain[0];
+            st.colorSubs.forEach(c => { if(c !== main && !subs.includes(c)) subs.push(c); });
+            if(!main && subs.length) main = subs.shift();
+            it.colors = main ? [main, ...subs] : [];
+          }else{
+            it.colors = [...new Set([...cur, ...add.colors])];
+          }
+        }
       });
       saveWardrobe(wardrobe);
       wardrobeSelectMode = false;
@@ -3211,13 +3282,15 @@
           </div>`).join('')}</div>
       </div>`;
     }
-    const noColor = wardrobe.filter(it => !(it.colors && it.colors.length)).length;
-    const noMaterial = wardrobe.filter(it => !(it.materials && it.materials.length)).length;
-    const noPattern = wardrobe.filter(it => !(it.patterns && it.patterns.length)).length;
+    const missCount = {};
+    wardrobe.forEach(it => wardrobeMissingLabels(it).forEach(l => { missCount[l] = (missCount[l] || 0) + 1; }));
+    const missLine = Object.keys(missCount).length
+      ? `<p class="text-[11px]" style="color:var(--thread-soft);">尚未標記：${Object.entries(missCount).map(([l, n]) => `${l} ${n} 件`).join('・')}</p>` : '';
     wrap.innerHTML =
-      (noColor || noMaterial || noPattern ? `<p class="text-[11px]" style="color:var(--thread-soft);">尚未標記：色系 ${noColor} 件・材質 ${noMaterial} 件・花式 ${noPattern} 件</p>` : '') +
+      missLine +
       section('類別', tally(it => it.categories || [])) +
       section('色系', tally(it => it.colors), name => colorDotHtml(name, 10)) +
+      section('類型', tally(it => it.types)) +
       section('花式', tally(it => it.patterns)) +
       section('材質', tally(it => it.materials)) +
       section('適穿季節', tally(it => it.seasons)) +
@@ -3247,7 +3320,8 @@
             <p class="text-sm font-semibold truncate">${escapeHtml(it.name)}${it.brand ? ` <span class="text-[11px] font-mono opacity-50">${escapeHtml(it.brand)}</span>` : ''}</p>
             <p class="text-[11px] font-mono opacity-50 mt-0.5">${escapeHtml((it.categories || ['其他']).join('、'))}${it.origin === 'import' ? ' ・ 🌏進口' : ''}${(it.linkedRecordId && linkedCounts[it.linkedRecordId] > 1) ? ' ・ 同筆購入 ' + linkedCounts[it.linkedRecordId] + ' 件' : ''}${(it.seasons && it.seasons.length) ? ' ・ ' + it.seasons.join('') : ''}</p>
             ${it.rating ? `<p class="text-xs mt-0.5" style="color:#b8901f;">${starsText(it.rating)}</p>` : ''}
-            ${(it.colors && it.colors.length) ? `<div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5">${it.colors.map(c => `<span class="inline-flex items-center gap-1 text-[11px]">${colorDotHtml(c, 10)}${escapeHtml(c)}</span>`).join('')}</div>` : ''}
+            ${(it.colors && it.colors.length) ? `<div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5">${it.colors.map((c, ci) => `<span class="inline-flex items-center gap-1 text-[11px]">${colorDotHtml(c, 10)}${itemKind(it) === 'shoes' ? (ci === 0 ? '主色 ' : '副色 ') : ''}${escapeHtml(c)}</span>`).join('')}</div>` : ''}
+            ${(it.types && it.types.length) ? `<p class="text-[11px] mt-1 opacity-70">類型：${escapeHtml(it.types.join('、'))}</p>` : ''}
             ${(it.patterns && it.patterns.length) ? `<p class="text-[11px] mt-1 opacity-70">花式：${escapeHtml(it.patterns.join('、'))}</p>` : ''}
             ${(it.materials && it.materials.length) ? `<p class="text-[11px] mt-1 opacity-70">材質：${escapeHtml(it.materials.join('、'))}</p>` : ''}
             ${(it.styles && it.styles.length) ? `<p class="text-[11px] mt-0.5 opacity-70">風格：${escapeHtml(it.styles.join('、'))}</p>` : ''}
@@ -3272,6 +3346,11 @@
     wrap.innerHTML = '';
 
     const filtered = getWardrobeFiltered();
+    if(wardrobeSelectMode){
+      // 篩選條件改變後，被篩掉（看不到）的單品不再算選取，避免對看不見的單品套用標記
+      const visible = new Set(filtered.map(it => it.id));
+      [...wardrobeSelectedIds].forEach(id => { if(!visible.has(id)) wardrobeSelectedIds.delete(id); });
+    }
     document.getElementById('wardrobeCount').textContent = wardrobe.length ? `（${wardrobe.length} 件）` : '';
     empty.classList.toggle('hidden', wardrobe.length > 0);
     noMatch.classList.toggle('hidden', !(wardrobe.length > 0 && filtered.length === 0));
@@ -3404,16 +3483,12 @@
 
   // ---------- 願望清單新增表單的新欄位狀態 ----------
   const wRating = { value: 0 };
-  const wColors = [], wPatterns = [], wMaterials = [], wSeasons = [], wStyles = [];
-  function refreshWishMaterialPicker(){
-    renderChipPicker('wMaterialPicker', () => materialOptionsFor(wSelectedCategories), wMaterials, MATERIAL_ADD);
+  const wAttr = newAttrState();
+  function refreshWishAttrPanel(){
+    renderAttrPanel('wAttrPanel', 'w', () => wSelectedCategories, wAttr);
   }
   renderStarPicker('wRatingPicker', wRating);
-  renderChipPicker('wColorPicker', colorOptions, wColors, COLOR_ADD);
-  renderChipPicker('wPatternPicker', patternOptions, wPatterns, PATTERN_ADD);
-  refreshWishMaterialPicker();
-  renderChipPicker('wSeasonPicker', toOptions(SEASON_OPTIONS), wSeasons);
-  renderChipPicker('wStylePicker', styleOptions, wStyles, STYLE_ADD);
+  refreshWishAttrPanel();
 
   // ---------- 願望清單評分（初步架構） ----------
   // 契合度＝拿願望清單品項跟「衣櫃已有單品」比對，六個面向各算 0–100 分，再依權重平均。
@@ -3421,35 +3496,76 @@
   const SCORE_SETTINGS_KEY = 'wardrobeLedgerScoreSettings';
   const SCORE_MIN_WARDROBE = 10;
   const NON_EVALUABLE_CATEGORIES = ['運費', '綜合(未拆分)', '其他'];
-  const SCORE_DIMENSIONS = [
-    { key:'category',  label:'類別缺口', hint:'同風格內，這個類別已有越多件，分數越低' },
-    { key:'color',     label:'色系缺口', hint:'同風格同類別中，相同顏色已有越多件，分數越低（補缺口優先）' },
-    { key:'pattern',   label:'花式缺口', hint:'同風格同類別中，相同花式（素色、條紋、格紋…）已有越多件，分數越低' },
-    { key:'material',  label:'材質平衡', hint:'同風格同類別中，相同材質已有越多件，分數越低' },
-    { key:'season',    label:'季節缺口', hint:'同類別中，適穿這個季節的已有越多件，分數越低' },
-    { key:'style',     label:'風格一致', hint:'越接近你衣櫃常見的風格，分數越高' },
-    { key:'duplicate', label:'不重複',   hint:'已有越多類似單品（同類別＋同色系，且材質／花式／風格沒有衝突），分數越低' },
-  ];
-  const DEFAULT_SCORE_SETTINGS = {
-    weights: { category:20, color:25, pattern:10, material:8, season:12, style:5, duplicate:20 },
-    prefBlend: 30,
-    satCategory: 6,  // 同風格同類別累積幾件，就視為「已經夠了」
-    satAttr: 3,      // 同風格同類別中，相同顏色／材質／花式累積幾件，就視為「已經夠了」
+  // 評分：衣物、鞋子、包包、飾品各有自己的面向、權重與飽和數量（互相獨立），願望清單項目依它的類別自動套用
+  const SCORE_DIM_DEFS = {
+    apparel: [
+      { key:'category',  label:'類別缺口', hint:'同風格內，這個類別已有越多件，分數越低' },
+      { key:'color',     label:'色系缺口', hint:'同風格同類別中，相同顏色已有越多件，分數越低（補缺口優先）' },
+      { key:'pattern',   label:'花式缺口', hint:'同風格同類別中，相同花式（素色、條紋、格紋…）已有越多件，分數越低' },
+      { key:'material',  label:'材質平衡', hint:'同風格同類別中，相同材質已有越多件，分數越低' },
+      { key:'season',    label:'季節缺口', hint:'同類別中，適穿這個季節的已有越多件，分數越低' },
+      { key:'style',     label:'風格一致', hint:'越接近你衣物常見的風格，分數越高' },
+      { key:'duplicate', label:'不重複',   hint:'已有越多類似單品（同類別＋同色系，且材質／花式／風格沒有衝突），分數越低' },
+    ],
+    shoes: [
+      { key:'type',      label:'鞋款缺口', hint:'同風格內，這種鞋款已有越多雙，分數越低' },
+      { key:'main',      label:'主色缺口', hint:'同鞋款同風格中，相同主色已有越多雙，分數越低' },
+      { key:'sub',       label:'副色缺口', hint:'同鞋款同風格中，相同副色已有越多雙，分數越低（沒填副色就不計入）' },
+      { key:'material',  label:'材質平衡', hint:'同鞋款同風格中，相同材質已有越多雙，分數越低' },
+      { key:'style',     label:'風格一致', hint:'越接近你鞋子常見的風格，分數越高' },
+      { key:'duplicate', label:'不重複',   hint:'已有越多類似的鞋（同鞋款＋同主色，材質、風格沒有衝突），分數越低' },
+    ],
+    bag: [
+      { key:'type',      label:'包款缺口', hint:'同風格內，這種包款已有越多個，分數越低' },
+      { key:'color',     label:'色系缺口', hint:'同包款同風格中，相同顏色已有越多個，分數越低' },
+      { key:'material',  label:'材質平衡', hint:'同包款同風格中，相同材質已有越多個，分數越低' },
+      { key:'style',     label:'風格一致', hint:'越接近你包包常見的風格，分數越高' },
+      { key:'duplicate', label:'不重複',   hint:'已有越多類似的包（同包款＋同色系，材質、風格沒有衝突），分數越低' },
+    ],
+    jewelry: [
+      { key:'type',      label:'類型缺口', hint:'這種飾品（手鍊、項鍊…）已有越多件，分數越低' },
+      { key:'color',     label:'色系缺口', hint:'同類型中，相同顏色已有越多件，分數越低' },
+      { key:'material',  label:'材質平衡', hint:'同類型中，相同材質已有越多件，分數越低' },
+      { key:'duplicate', label:'不重複',   hint:'已有越多類似的飾品（同類型＋同色系，材質沒有衝突），分數越低' },
+    ],
   };
+  const DEFAULT_KIND_SETTINGS = {
+    apparel: { weights:{ category:20, color:25, pattern:10, material:8, season:12, style:5, duplicate:20 }, satCategory:6, satAttr:3 },
+    shoes:   { weights:{ type:25, main:25, sub:8, material:12, style:10, duplicate:20 }, satType:3, satAttr:2 },
+    bag:     { weights:{ type:30, color:25, material:15, style:10, duplicate:20 }, satType:2, satAttr:2 },
+    jewelry: { weights:{ type:35, color:25, material:20, duplicate:20 }, satType:3, satAttr:2 },
+  };
+  const DEFAULT_PREF_BLEND = 30;
+  const KIND_MIN_POOL = { apparel: SCORE_MIN_WARDROBE, shoes: 5, bag: 3, jewelry: 3 };
+  const KIND_NEED_HINT = {
+    apparel: '色系、季節、材質或風格',
+    shoes: '主色、鞋款類型、材質或風格',
+    bag: '色系、包款類型、材質或風格',
+    jewelry: '色系、類型或材質',
+  };
+  function typeSatKey(kind){ return kind === 'apparel' ? 'satCategory' : 'satType'; }
+  // 設定格式：{ prefBlend, kinds:{ apparel:{weights,satCategory,satAttr}, shoes:{weights,satType,satAttr}, ... } }；相容舊版（只有衣物）
   function normalizeScoreSettings(s){
-    const d = DEFAULT_SCORE_SETTINGS;
     const num = (v, def) => (typeof v === 'number' && isFinite(v)) ? v : def;
-    return {
-      weights: { ...d.weights, ...((s && s.weights) || {}) },
-      prefBlend: num(s && s.prefBlend, d.prefBlend),
-      satCategory: Math.max(1, num(s && s.satCategory, d.satCategory)),
-      satAttr: Math.max(1, num(s && s.satAttr, d.satAttr)),
-    };
+    const out = { prefBlend: num(s && s.prefBlend, DEFAULT_PREF_BLEND), kinds: {} };
+    Object.keys(DEFAULT_KIND_SETTINGS).forEach(k => {
+      const base = DEFAULT_KIND_SETTINGS[k];
+      let src = (s && s.kinds && s.kinds[k]) || null;
+      if(!src && k === 'apparel' && s && s.weights) src = { weights: s.weights, satCategory: s.satCategory, satAttr: s.satAttr };
+      src = src || {};
+      const tk = typeSatKey(k);
+      out.kinds[k] = {
+        weights: { ...base.weights, ...(src.weights || {}) },
+        [tk]: Math.max(1, num(src[tk], base[tk])),
+        satAttr: Math.max(1, num(src.satAttr, base.satAttr)),
+      };
+    });
+    return out;
   }
   function loadScoreSettings(){
     try{
       const s = JSON.parse(localStorage.getItem(SCORE_SETTINGS_KEY));
-      if(s && s.weights) return normalizeScoreSettings(s);
+      if(s && (s.kinds || s.weights)) return normalizeScoreSettings(s);
     }catch(e){ /* 用預設值 */ }
     return normalizeScoreSettings(null);
   }
@@ -3463,14 +3579,11 @@
   // 飽和分數：相同的已經有 0 件＝100 分，累積到 cap 件＝0 分（線性遞減）
   function saturationScore(same, cap){ return 100 * Math.max(0, 1 - same / Math.max(cap, 1)); }
 
-  // 同儕群組：跟願望清單品項「同類別、同風格」的衣櫃單品。
-  // 衣櫃單品還沒標風格的也先算進來，避免標記不全時把「獨特性」高估。
-  // 顏色、材質、花式都在這個群組裡比對，所以各個面向會互相影響。
-  function peerGroupFor(item){
-    const cats = (Array.isArray(item.categories) ? item.categories : (item.category ? [item.category] : []))
-      .filter(c => !NON_EVALUABLE_CATEGORIES.includes(c));
+  // 衣物的同儕群組：同類別、同風格（衣櫃單品沒標風格的也先算進來，避免標記不全時高估「獨特性」）
+  function peerGroupFor(item, pool){
+    const cats = categoriesOf(item).filter(c => !NON_EVALUABLE_CATEGORIES.includes(c));
     const styles = item.styles || [];
-    let peers = wardrobe;
+    let peers = pool;
     const desc = [];
     let unknownStyle = 0;
     if(cats.length){
@@ -3490,52 +3603,53 @@
   }
 
   // 在 peers 裡，統計「相同屬性值」有幾件，越多分數越低；多個值取平均
-  function peerAttrDimension(values, getter, peers, cap, noun, scopeText){
+  function peerAttrDimension(values, getter, peers, cap, noun, scopeText, unit){
     if(!values.length) return null;
+    const u = unit || '件';
     const scores = [], reasons = [];
     values.forEach(v => {
       const same = peers.filter(w => (getter(w) || []).includes(v)).length;
       scores.push(saturationScore(same, cap));
-      reasons.push(`${v}：已有 ${same} 件`);
+      reasons.push(`${v}：已有 ${same} ${u}`);
     });
     const tagged = peers.filter(w => (getter(w) || []).length).length;
     reasons.push(peers.length === 0
       ? `${scopeText}沒有單品（空缺）`
-      : `${scopeText}共 ${peers.length} 件，${tagged} 件已標記${noun}`);
+      : `${scopeText}共 ${peers.length} ${u}，${tagged} ${u}已標記${noun}`);
     return { score: avgOf(scores), reasons };
   }
 
-  // 統計衣櫃裡各選項出現幾件（一件單品同一選項只算一次），並回報有幾件已標記這個屬性
-  function wardrobeCountsFor(getter, names){
+  // 統計 pool 裡各選項出現幾件（一件單品同一選項只算一次），並回報有幾件已標記這個屬性
+  function wardrobeCountsFor(getter, names, pool){
     const counts = {};
     names.forEach(n => { counts[n] = 0; });
     let tagged = 0;
-    wardrobe.forEach(it => {
+    pool.forEach(it => {
       const vals = new Set((getter(it) || []).filter(v => Object.prototype.hasOwnProperty.call(counts, v)));
       if(vals.size) tagged++;
       vals.forEach(v => { counts[v]++; });
     });
     return { counts, tagged };
   }
-  // 一致：越接近衣櫃最常見的值分數越高（用在風格，代表你的整體喜好）
-  function fitDimension(values, cc){
+  // 一致：越接近這個種類最常見的值分數越高（風格＝你的整體喜好）
+  function fitDimension(values, cc, pool, unit){
     const valid = values.filter(v => Object.prototype.hasOwnProperty.call(cc.counts, v));
     if(!valid.length) return null;
     const max = Math.max(...Object.values(cc.counts));
     if(max === 0) return null;
     const maxName = Object.keys(cc.counts).find(k => cc.counts[k] === max);
     const score = valid.reduce((s, v) => s + 100 * (cc.counts[v] / max), 0) / valid.length;
-    const reasons = valid.map(v => `${v}：衣櫃有 ${cc.counts[v]} 件（最多的「${maxName}」${max} 件）`);
-    reasons.push(`衣櫃有 ${cc.tagged}/${wardrobe.length} 件已標記風格`);
+    const reasons = valid.map(v => `${v}：衣櫃有 ${cc.counts[v]} ${unit}（最多的「${maxName}」${max} ${unit}）`);
+    reasons.push(`衣櫃有 ${cc.tagged}/${pool.length} ${unit}已標記風格`);
     return { score, reasons };
   }
-  // 類似單品：同類別＋同色系，且（雙方都有標記時）材質、花式、風格至少一個相同
-  function findSimilarWardrobe(item){
-    const cats = (item.categories || []).filter(c => !NON_EVALUABLE_CATEGORIES.includes(c));
+  // 衣物的類似單品：同類別＋同色系，且（雙方都有標記時）材質、花式、風格至少一個相同
+  function findSimilarApparel(item, pool){
+    const cats = categoriesOf(item).filter(c => !NON_EVALUABLE_CATEGORIES.includes(c));
     const colors = item.colors || [];
     if(!cats.length || !colors.length) return null;
     const mats = item.materials || [], pats = item.patterns || [], styles = item.styles || [];
-    return wardrobe.filter(w => {
+    return pool.filter(w => {
       if(!sharesAny(w.categories, cats)) return false;
       if(!sharesAny(w.colors, colors)) return false;
       if(mats.length && (w.materials || []).length && !sharesAny(w.materials, mats)) return false;
@@ -3544,41 +3658,115 @@
       return true;
     });
   }
+  function similarReasons(similar){
+    return [similar.length
+      ? `已有 ${similar.length} 件類似：${similar.slice(0, 3).map(w => w.name).join('、')}${similar.length > 3 ? '…' : ''}`
+      : '衣櫃裡沒有類似的單品'];
+  }
 
-  function computeWishlistScore(item){
-    const N = wardrobe.length;
-    if(N === 0) return { status: 'noWardrobe' };
-    const cap = scoreSettings.satAttr;
-    const pg = peerGroupFor(item);
+  function computeApparelDims(item, pool, ks){
+    const cap = ks.satAttr;
+    const pg = peerGroupFor(item, pool);
     const clean = arr => (arr || []).filter(v => v !== '其他');
-
     const dims = {};
     dims.category = pg.cats.length ? {
-      score: saturationScore(pg.peers.length, scoreSettings.satCategory),
+      score: saturationScore(pg.peers.length, ks.satCategory),
       reasons: [`${pg.desc.join('＋')}：衣櫃已有 ${pg.peers.length} 件${pg.unknownStyle ? `（含 ${pg.unknownStyle} 件尚未標記風格）` : ''}`],
     } : null;
     dims.color    = peerAttrDimension(item.colors || [], w => w.colors, pg.peers, cap, '色系', '比對範圍內');
     dims.pattern  = peerAttrDimension(clean(item.patterns), w => w.patterns, pg.peers, cap, '花式', '比對範圍內');
     dims.material = peerAttrDimension(clean(item.materials), w => w.materials, pg.peers, cap, '材質', '比對範圍內');
     dims.season   = peerAttrDimension(item.seasons || [], w => w.seasons, pg.catPeers, cap, '季節', '同類別中');
-    dims.style    = fitDimension(item.styles || [], wardrobeCountsFor(w => w.styles, styleOptions()));
-    const similar = findSimilarWardrobe(item);
+    dims.style    = fitDimension(item.styles || [], wardrobeCountsFor(w => w.styles, styleOptions(), pool), pool, '件');
+    const similar = findSimilarApparel(item, pool);
+    dims.duplicate = similar ? { score: saturationScore(similar.length, cap), reasons: similarReasons(similar) } : null;
+    return {
+      dims,
+      scope: pg.desc.length ? `${pg.desc.join('＋')}，衣櫃共 ${pg.peers.length} 件` : '未指定類別與風格，以全部衣物比對',
+    };
+  }
+
+  // 鞋子／包包／飾品：用「類型」取代衣物的「類別」當同儕群組（鞋子、包包再加上風格）
+  function computeCarryDims(item, kind, pool, ks){
+    const cfg = KIND_CONFIG[kind];
+    const unit = cfg.unit;
+    const cap = ks.satAttr;
+    const types = item.types || [];
+    const hasStyle = cfg.fields.includes('styles');
+    const styles = hasStyle ? (item.styles || []) : [];
+    const clean = arr => (arr || []).filter(v => v !== '其他');
+    let peers = pool;
+    const desc = [];
+    let unknownType = 0, unknownStyle = 0;
+    if(types.length){
+      peers = peers.filter(w => { const wt = w.types || []; if(!wt.length){ unknownType++; return true; } return sharesAny(wt, types); });
+      desc.push(`同類型（${types.join('、')}）`);
+    }
+    if(styles.length){
+      peers = peers.filter(w => { const ws = w.styles || []; if(!ws.length){ unknownStyle++; return true; } return sharesAny(ws, styles); });
+      desc.push(`同風格（${styles.join('、')}）`);
+    }
+    const notes = [];
+    if(unknownType) notes.push(`含 ${unknownType} ${unit}尚未標記類型`);
+    if(unknownStyle) notes.push(`含 ${unknownStyle} ${unit}尚未標記風格`);
+
+    const colors = item.colors || [];
+    const mats = clean(item.materials);
+    const dims = {};
+    dims.type = types.length ? {
+      score: saturationScore(peers.length, ks.satType),
+      reasons: [`${desc.join('＋')}：衣櫃已有 ${peers.length} ${unit}${notes.length ? `（${notes.join('、')}）` : ''}`],
+    } : null;
+    if(cfg.mainSub){
+      dims.main = colors.length ? peerAttrDimension([colors[0]], w => (w.colors || []).slice(0, 1), peers, cap, '主色', '比對範圍內', unit) : null;
+      dims.sub = colors.length > 1 ? peerAttrDimension(colors.slice(1), w => (w.colors || []).slice(1), peers, cap, '副色', '比對範圍內', unit) : null;
+    }else{
+      dims.color = peerAttrDimension(colors, w => w.colors, peers, cap, '色系', '比對範圍內', unit);
+    }
+    dims.material = peerAttrDimension(mats, w => w.materials, peers, cap, '材質', '比對範圍內', unit);
+    if(hasStyle) dims.style = fitDimension(item.styles || [], wardrobeCountsFor(w => w.styles, styleOptions(), pool), pool, unit);
+
+    // 類似：同類型＋同色（鞋子比主色），材質、風格有標記時不能衝突
+    let similar = null;
+    if(types.length && colors.length){
+      similar = pool.filter(w => {
+        if(!sharesAny(w.types, types)) return false;
+        if(cfg.mainSub ? (w.colors || [])[0] !== colors[0] : !sharesAny(w.colors, colors)) return false;
+        if(mats.length && (w.materials || []).length && !sharesAny(w.materials, mats)) return false;
+        if(hasStyle && styles.length && (w.styles || []).length && !sharesAny(w.styles, styles)) return false;
+        return true;
+      });
+    }
     dims.duplicate = similar ? {
       score: saturationScore(similar.length, cap),
       reasons: [similar.length
-        ? `已有 ${similar.length} 件類似：${similar.slice(0, 3).map(w => w.name).join('、')}${similar.length > 3 ? '…' : ''}`
-        : '衣櫃裡沒有類似的單品'],
+        ? `已有 ${similar.length} ${unit}類似：${similar.slice(0, 3).map(w => w.name).join('、')}${similar.length > 3 ? '…' : ''}`
+        : `衣櫃裡沒有類似的${cfg.label}`],
     } : null;
+    return {
+      dims,
+      scope: desc.length ? `${cfg.label}：${desc.join('＋')}，共 ${peers.length} ${unit}` : `${cfg.label}：未指定類型，以全部 ${pool.length} ${unit}比對`,
+    };
+  }
+
+  function computeWishlistScore(item){
+    if(wardrobe.length === 0) return { status: 'noWardrobe' };
+    const kind = itemKind(item);
+    const cfg = KIND_CONFIG[kind];
+    const pool = wardrobe.filter(w => itemKind(w) === kind);
+    const ks = scoreSettings.kinds[kind];
+    const r = kind === 'apparel' ? computeApparelDims(item, pool, ks) : computeCarryDims(item, kind, pool, ks);
+    const dims = r.dims;
 
     let sum = 0, wsum = 0, used = 0;
-    SCORE_DIMENSIONS.forEach(d => {
+    SCORE_DIM_DEFS[kind].forEach(d => {
       const dim = dims[d.key];
       if(!dim) return;
       used++;
-      const w = scoreSettings.weights[d.key] || 0;
+      const w = ks.weights[d.key] || 0;
       if(w > 0){ sum += dim.score * w; wsum += w; }
     });
-    if(used < 2 || wsum === 0) return { status: 'insufficient', dims };
+    if(used < 2 || wsum === 0) return { status: 'insufficient', kind, dims };
 
     const fit = sum / wsum;
     const rating = item.rating || 0;
@@ -3586,11 +3774,11 @@
     const p = scoreSettings.prefBlend / 100;
     const total = pref !== null ? fit * (1 - p) + pref * p : fit;
     return {
-      status: 'ok', dims, fit, pref, rating, total,
-      scope: pg.desc.length ? `${pg.desc.join('＋')}，衣櫃共 ${pg.peers.length} 件` : '未指定類別與風格，以整個衣櫃比對',
+      status: 'ok', kind, dims, fit, pref, rating, total,
+      scope: r.scope,
       lowPref: rating > 0 && rating <= 2,
-      smallWardrobe: N < SCORE_MIN_WARDROBE,
-      wardrobeCount: N,
+      smallWardrobe: pool.length < KIND_MIN_POOL[kind],
+      poolCount: pool.length, minPool: KIND_MIN_POOL[kind], kindLabel: cfg.label, unit: cfg.unit,
     };
   }
 
@@ -3603,13 +3791,13 @@
       return `<p class="text-[11px] mt-2 opacity-60">衣櫃還是空的，加入單品後才能算契合度</p><p class="text-xs mt-1">喜愛度 ${stars}</p>`;
     }
     if(res.status === 'insufficient'){
-      return `<p class="text-[11px] mt-2" style="color:var(--rust);">評分資料不足${compact ? '' : '：請按「編輯」補上色系、季節、材質或風格（至少兩項能和衣櫃比對）'}</p><p class="text-xs mt-1">喜愛度 ${stars}</p>`;
+      return `<p class="text-[11px] mt-2" style="color:var(--rust);">評分資料不足${compact ? '' : `：請按「編輯」補上${KIND_NEED_HINT[res.kind]}（至少兩項能和衣櫃比對）`}</p><p class="text-xs mt-1">喜愛度 ${stars}</p>`;
     }
     const badge = (label, v) => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono" style="background:rgba(15,27,45,0.06);">${label} <b style="color:${scoreColorFor(v)};">${Math.round(v)}</b></span>`;
     let html = `<div class="flex flex-wrap items-center gap-1.5 mt-2">${badge('契合度', res.fit)}<span class="text-xs">${stars}</span>${res.pref !== null ? badge('綜合', res.total) : ''}</div>`;
     if(res.lowPref) html += '<p class="text-[11px] mt-1" style="color:var(--rust);">⚠ 喜愛度偏低，即使契合度高也建議再想想</p>';
     if(compact) return html;
-    const rows = SCORE_DIMENSIONS.map(d => {
+    const rows = SCORE_DIM_DEFS[res.kind].map(d => {
       const dim = res.dims[d.key];
       if(!dim) return `<div class="py-1"><div class="flex justify-between text-[11px]"><span class="opacity-60">${d.label}</span><span class="opacity-50">未計入</span></div></div>`;
       return `<div class="py-1">
@@ -3618,35 +3806,54 @@
         <p class="text-[10px] opacity-60 mt-0.5">${dim.reasons.map(escapeHtml).join('；')}</p>
       </div>`;
     }).join('');
-    html += `<details class="mt-2"><summary class="text-[11px] opacity-60 cursor-pointer">查看評分明細</summary><div class="mt-1.5">${res.scope ? `<p class="text-[10px] mb-1" style="color:#8a6d10;">比對範圍：${escapeHtml(res.scope)}</p>` : ''}${rows}${res.smallWardrobe ? `<p class="text-[10px] mt-1" style="color:#8a6d10;">衣櫃目前只有 ${res.wardrobeCount} 件，建議至少 ${SCORE_MIN_WARDROBE} 件再參考</p>` : ''}</div></details>`;
+    html += `<details class="mt-2"><summary class="text-[11px] opacity-60 cursor-pointer">查看評分明細（${res.kindLabel}標準）</summary><div class="mt-1.5">${res.scope ? `<p class="text-[10px] mb-1" style="color:#8a6d10;">比對範圍：${escapeHtml(res.scope)}</p>` : ''}${rows}${res.smallWardrobe ? `<p class="text-[10px] mt-1" style="color:#8a6d10;">衣櫃的${res.kindLabel}目前只有 ${res.poolCount} ${res.unit}，建議至少 ${res.minPool} ${res.unit}再參考</p>` : ''}</div></details>`;
     return html;
   }
 
-  // ---------- 評分設定面板（權重） ----------
+  // ---------- 評分設定面板：四個種類各一組權重與飽和數量 ----------
+  let scoreSettingsKind = 'apparel';
+  const SAT_TEXT = {
+    apparel: { type:['類別飽和件數', '同風格同類別累積到幾件，就視為「已經夠了」（類別缺口扣到 0 分）'], attr:['同色／同材質／同花式飽和件數', '同風格同類別裡，相同顏色（或材質、花式）累積到幾件，就視為「已經夠了」'] },
+    shoes:   { type:['同鞋款飽和雙數', '同鞋款（同風格）累積到幾雙，就視為「已經夠了」'], attr:['同主色／副色／材質飽和雙數', '同鞋款同風格裡，相同主色（或副色、材質）累積到幾雙，就視為「已經夠了」'] },
+    bag:     { type:['同包款飽和個數', '同包款（同風格）累積到幾個，就視為「已經夠了」'], attr:['同色／同材質飽和個數', '同包款同風格裡，相同顏色（或材質）累積到幾個，就視為「已經夠了」'] },
+    jewelry: { type:['同類型飽和件數', '同類型飾品累積到幾件，就視為「已經夠了」'], attr:['同色／同材質飽和件數', '同類型裡，相同顏色（或材質）累積到幾件，就視為「已經夠了」'] },
+  };
   function renderScoreSettings(){
     const wrap = document.getElementById('scoreSettingsPanel');
+    const kind = scoreSettingsKind;
+    const ks = scoreSettings.kinds[kind];
+    const defs = SCORE_DIM_DEFS[kind];
+    const unit = KIND_CONFIG[kind].unit;
+    const tk = typeSatKey(kind);
     const slider = (label, valId, id, min, max, step, value, suffix, hint, extraAttr) => `
       <div>
         <div class="flex justify-between text-xs mb-1"><span style="color:var(--paper);">${label}</span><span id="${valId}" class="font-mono" style="color:var(--paper);">${value}${suffix}</span></div>
         <input type="range" min="${min}" max="${max}" step="${step}" value="${value}" id="${id}" ${extraAttr || ''} class="w-full" style="accent-color:var(--thread);">
         <p class="text-[10px]" style="color:rgba(244,239,227,0.4);">${hint}</p>
       </div>`;
-    wrap.innerHTML =
-      SCORE_DIMENSIONS.map(d => slider(d.label, 'swVal_' + d.key, 'swSlider_' + d.key, 0, 50, 5, scoreSettings.weights[d.key], '', d.hint, `data-key="${d.key}" data-kind="weight"`)).join('') + `
+    wrap.innerHTML = `
+      <div class="flex gap-1.5">${KIND_ORDER.map(k => `<button type="button" class="scoreKindBtn btn-press flex-1 py-1.5 rounded-lg text-xs" data-kind="${k}" style="background:${k === kind ? 'var(--thread)' : 'rgba(244,239,227,0.08)'}; color:${k === kind ? 'var(--ink)' : 'var(--paper)'};">${KIND_CONFIG[k].label}</button>`).join('')}</div>
+      <p class="text-[10px]" style="color:rgba(244,239,227,0.45);">各種類有各自獨立的評分標準與權重，願望清單項目會依它的類別（鞋子、包包、飾品、其他視為衣物）自動套用對應的標準。</p>` +
+      defs.map(d => slider(d.label, 'swVal_' + d.key, 'swSlider_' + d.key, 0, 50, 5, ks.weights[d.key], '', d.hint, `data-key="${d.key}" data-kind="weight"`)).join('') + `
       <div class="pt-2 space-y-3" style="border-top:1px solid rgba(244,239,227,0.1);">
-        ${slider('類別飽和件數', 'swVal_satCategory', 'swSlider_satCategory', 1, 15, 1, scoreSettings.satCategory, ' 件', '同風格同類別累積到幾件，就視為「已經夠了」（類別缺口扣到 0 分）', 'data-kind="satCategory"')}
-        ${slider('同色／同材質／同花式飽和件數', 'swVal_satAttr', 'swSlider_satAttr', 1, 8, 1, scoreSettings.satAttr, ' 件', '同風格同類別裡，相同顏色（或材質、花式）累積到幾件，就視為「已經夠了」（該項扣到 0 分）', 'data-kind="satAttr"')}
-        ${slider('喜愛度占總分比重', 'swVal_pref', 'swSlider_pref', 0, 100, 5, scoreSettings.prefBlend, '%', '有評喜愛度的項目，綜合分＝契合度×(1−比重)＋喜愛度×比重', 'data-kind="pref"')}
+        ${slider(SAT_TEXT[kind].type[0], 'swVal_satType', 'swSlider_satType', 1, 15, 1, ks[tk], ' ' + unit, SAT_TEXT[kind].type[1], 'data-kind="satType"')}
+        ${slider(SAT_TEXT[kind].attr[0], 'swVal_satAttr', 'swSlider_satAttr', 1, 8, 1, ks.satAttr, ' ' + unit, SAT_TEXT[kind].attr[1], 'data-kind="satAttr"')}
+        ${slider('喜愛度占總分比重（四個種類共用）', 'swVal_pref', 'swSlider_pref', 0, 100, 5, scoreSettings.prefBlend, '%', '有評喜愛度的項目，綜合分＝契合度×(1−比重)＋喜愛度×比重', 'data-kind="pref"')}
       </div>
-      <button id="scoreSettingsReset" type="button" class="btn-press text-[11px] underline" style="color:var(--thread-soft);">恢復預設設定</button>`;
+      <button id="scoreSettingsReset" type="button" class="btn-press text-[11px] underline" style="color:var(--thread-soft);">恢復「${KIND_CONFIG[kind].label}」的預設設定</button>`;
 
+    wrap.querySelectorAll('.scoreKindBtn').forEach(b => b.addEventListener('click', ()=>{
+      scoreSettingsKind = b.dataset.kind;
+      renderScoreSettings();
+    }));
     wrap.querySelectorAll('input[type="range"]').forEach(inp => {
       inp.addEventListener('input', ()=>{
-        const kind = inp.dataset.kind, v = parseInt(inp.value);
+        const k = inp.dataset.kind, v = parseInt(inp.value);
+        const cur = scoreSettings.kinds[kind]; // 事件發生時才取最新的設定（整份設定可能被還原備份換掉）
         let valId, suffix = '';
-        if(kind === 'weight'){ scoreSettings.weights[inp.dataset.key] = v; valId = 'swVal_' + inp.dataset.key; }
-        else if(kind === 'satCategory'){ scoreSettings.satCategory = v; valId = 'swVal_satCategory'; suffix = ' 件'; }
-        else if(kind === 'satAttr'){ scoreSettings.satAttr = v; valId = 'swVal_satAttr'; suffix = ' 件'; }
+        if(k === 'weight'){ cur.weights[inp.dataset.key] = v; valId = 'swVal_' + inp.dataset.key; }
+        else if(k === 'satType'){ cur[tk] = v; valId = 'swVal_satType'; suffix = ' ' + unit; }
+        else if(k === 'satAttr'){ cur.satAttr = v; valId = 'swVal_satAttr'; suffix = ' ' + unit; }
         else { scoreSettings.prefBlend = v; valId = 'swVal_pref'; suffix = '%'; }
         document.getElementById(valId).textContent = v + suffix;
         saveScoreSettings();
@@ -3654,7 +3861,7 @@
       inp.addEventListener('change', renderWishlist);
     });
     document.getElementById('scoreSettingsReset').addEventListener('click', ()=>{
-      scoreSettings = normalizeScoreSettings(null);
+      scoreSettings.kinds[kind] = normalizeScoreSettings(null).kinds[kind];
       saveScoreSettings();
       renderScoreSettings();
       renderWishlist();
