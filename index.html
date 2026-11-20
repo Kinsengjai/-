@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>置裝帳本｜分期追蹤</title>
+<title>白日衣衫盡</title>
 <!-- iOS「加到主畫面」全螢幕設定：從主畫面圖示開啟時會隱藏 Safari 網址列與狀態列背景 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="置裝帳本">
+<meta name="apple-mobile-web-app-title" content="白日衣衫盡">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="48x48" href="favicon.png">
 <meta name="theme-color" content="#1B2A41">
@@ -100,6 +100,9 @@
     to{ opacity:1; transform: translateY(0); }
   }
   .rise-in{ animation: riseIn .25s ease both; }
+  .poemCaption{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:0 2px 14px; }
+  .poemLine{ font-family:"Songti TC","STSong","Noto Serif TC",serif; font-size:15px; letter-spacing:.28em; color:var(--thread-soft); }
+  .poemSub{ font-size:11px; color:rgba(244,239,227,0.4); }
   .navBtn{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 0 6px; color:rgba(244,239,227,0.5); background:none; border:none; transition:color .15s; }
   .navBtn .navIcon{ font-size:20px; line-height:1; }
   .navBtn .navLabel{ font-size:10px; letter-spacing:.04em; font-family:'Oswald',sans-serif; }
@@ -124,13 +127,16 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h4l2 2 2-2h4l3 5-4 3v10H7V11L3 8z"/></svg>
         </div>
         <div>
-          <h1 class="font-display text-xl text-[var(--paper)] tracking-wide">置裝帳本</h1>
-          <p class="text-[11px] font-mono" style="color:rgba(244,239,227,0.4);">WARDROBE LEDGER &amp; INSTALLMENTS</p>
+          <h1 id="appTitle" class="font-display text-xl text-[var(--paper)] tracking-wide cursor-pointer">白日衣衫盡</h1>
+          <p class="text-[11px] font-mono" style="color:rgba(244,239,227,0.4);">WARDROBE · SPENDING · OUTFITS</p>
         </div>
       </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="aboutBtn" type="button" aria-label="關於" class="btn-press w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-display text-sm" style="background:rgba(244,239,227,0.08); color:var(--paper);">ⓘ</button>
       <button id="backupBtn" type="button" class="btn-press w-9 h-9 rounded-full flex items-center justify-center shrink-0" style="background:rgba(244,239,227,0.08);">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--paper)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
       </button>
+      </div>
     </div>
   </header>
 
@@ -220,7 +226,7 @@
 
         <button type="submit" class="btn-press w-full py-3 rounded-lg font-display tracking-wide text-sm"
           style="background:var(--ink); color:var(--paper);">
-          ✂️ 加入帳本
+          ✂️ 記下這筆消費
         </button>
       </form>
 
@@ -287,6 +293,7 @@
 
     <!-- ============ TAB 2: 每月總覽 ============ -->
     <section id="panelOverview" class="hidden">
+      <div class="poemCaption"><span class="poemLine">黃河入海流</span><span class="poemSub">花費如江河，一個月一個月流向哪裡</span></div>
 
       <div class="grid grid-cols-2 gap-2 p-1 rounded-xl mb-5" style="background:rgba(244,239,227,0.06);">
         <button id="viewModeMonthBtn" type="button" class="tab-btn active font-display text-sm py-2 rounded-lg btn-press">月檢視</button>
@@ -444,6 +451,7 @@
 
     <!-- ============ TAB 3: 願望清單 ============ -->
     <section id="panelWishlist" class="hidden">
+      <div class="poemCaption"><span class="poemLine">欲窮千里目</span><span class="poemSub">想要的東西，先看遠一點再決定</span></div>
       <form id="wishlistForm" class="tag-card stitch-edge p-5 rise-in mb-6">
         <div class="tag-hole"></div>
         <p class="font-display text-xs tracking-widest mb-3" style="color:var(--rust);">WISHLIST ITEM</p>
@@ -514,6 +522,7 @@
 
     <!-- ============ TAB 4: My Wardrobe（我的衣櫃） ============ -->
     <section id="panelWardrobe" class="hidden">
+      <div class="poemCaption"><span class="poemLine">白日衣衫盡</span><span class="poemSub">衣櫥裡的每一件</span></div>
       <div class="grid grid-cols-2 gap-2 p-1 rounded-xl mb-4" style="background:rgba(244,239,227,0.06);">
         <button id="wdViewItemsBtn" type="button" class="tab-btn active font-display text-sm py-2 rounded-lg btn-press">👕 單品</button>
         <button id="wdViewLogBtn" type="button" class="tab-btn font-display text-sm py-2 rounded-lg btn-press">📝 穿搭紀錄</button>
@@ -596,11 +605,12 @@
 
     <!-- ============ TAB 5: 搭配 ============ -->
     <section id="panelOutfit" class="hidden">
+      <div class="poemCaption"><span class="poemLine">更上一層樓</span><span class="poemSub">天冷了，就再加一層</span></div>
       <div class="tag-card stitch-edge p-5 mb-5 rise-in">
         <div class="tag-hole"></div>
         <p class="font-display text-xs tracking-widest mb-1" style="color:var(--rust);">OUTFIT STUDIO</p>
         <p class="text-sm font-semibold mb-1">搭配系統準備中 🧥</p>
-        <p class="text-xs opacity-70 leading-relaxed">之後這裡會根據天氣、你選的風格與顏色，幫你搭出一整套。搭配準不準取決於衣櫃的資料，先把下面的項目備齊。</p>
+        <p class="text-xs opacity-70 leading-relaxed">之後這裡會根據天氣、你選的風格與顏色，幫你搭出一整套；天氣轉涼，就是「更上一層」，由它決定該加哪一層。搭配準不準取決於衣櫃的資料，先把下面的項目備齊。</p>
       </div>
 
       <p class="font-display text-xs tracking-widest mb-2 px-1" style="color:rgba(244,239,227,0.45);">各部位的資料準備度</p>
@@ -1804,11 +1814,12 @@
     const a = document.createElement('a');
     const dateStr = todayStr();
     a.href = url;
-    a.download = `置裝帳本_匯出_${dateStr}.csv`;
+    a.download = `白日衣衫盡_匯出_${dateStr}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // 延後作廢暫存網址：馬上作廢的話，部分瀏覽器會拿不到檔名或下載失敗
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
   function openBackupPanel(){
@@ -4651,6 +4662,38 @@
       showToast(existing ? '✓ 已更新穿搭紀錄' : `✓ 已記錄 ${ids.size} 件單品的穿搭`);
     });
   }
+
+  // ---------- 關於：名字的由來 ----------
+  function openAbout(){
+    const serif = `font-family:'Songti TC','STSong','Noto Serif TC',serif;`;
+    const row = (poem, title, text) => `
+      <div class="flex gap-3 items-baseline">
+        <span class="shrink-0" style="${serif} font-size:14px; letter-spacing:.2em; color:#8a6d10; width:5.8rem;">${poem}</span>
+        <p class="text-xs leading-relaxed"><span class="font-semibold">${title}</span>　${text}</p>
+      </div>`;
+    detailModalContent.innerHTML = `
+      <div class="tag-hole"></div>
+      <p class="font-display text-xs tracking-widest mb-4" style="color:var(--rust);">ABOUT</p>
+      <p class="text-center" style="${serif} font-size:26px; letter-spacing:.32em; line-height:1.3; padding-left:.32em;">白日衣衫盡</p>
+      <p class="text-center text-[11px] opacity-50 mt-1 mb-5">諧音王之渙〈登鸛雀樓〉的「白日依山盡」</p>
+      <div class="space-y-3">
+        ${row('白日衣衫盡', '衣櫃', '衣櫥裡的每一件，都在這裡。')}
+        ${row('黃河入海流', '總覽', '花費像江河，一個月一個月流向哪裡，看得清清楚楚。')}
+        ${row('欲窮千里目', '願望', '「欲」是想要。想買的東西，先看遠一點，再決定下不下手。')}
+        ${row('更上一層樓', '搭配', '「層」是穿搭的層次。天冷了，就再加一層。')}
+      </div>
+      <div class="mt-5 pt-4 text-center" style="border-top:1px dashed rgba(15,27,45,0.2);">
+        <p style="${serif} font-size:13px; letter-spacing:.15em; line-height:1.9; opacity:.75;">白日依山盡，黃河入海流。<br>欲窮千里目，更上一層樓。</p>
+        <p class="text-[10px] opacity-40 mt-1">王之渙〈登鸛雀樓〉</p>
+      </div>
+      <p class="text-[11px] font-mono opacity-50 text-center mt-4">消費紀錄 ${records.length} 筆 ・ 衣櫃 ${ownedItems().length} 件 ・ 穿搭紀錄 ${wearLog.length} 筆</p>
+      <button id="aboutClose" type="button" class="btn-press w-full mt-4 py-3 rounded-lg font-display tracking-wide text-sm" style="background:var(--ink); color:var(--paper);">關閉</button>
+    `;
+    detailModal.classList.remove('hidden');
+    document.getElementById('aboutClose').addEventListener('click', closeDetail);
+  }
+  document.getElementById('aboutBtn').addEventListener('click', openAbout);
+  document.getElementById('appTitle').addEventListener('click', openAbout);
 
   // ---------- Init ----------
   updatePreview();
