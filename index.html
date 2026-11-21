@@ -108,7 +108,6 @@
   .navBtn .navLabel{ font-size:10px; letter-spacing:.04em; font-family:'Oswald',sans-serif; }
   .navBtn.active{ color:var(--thread-soft); }
   .navBtn.active .navLabel{ font-weight:600; }
-  .main-pad{ padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
   .wdGroupSummary{ list-style:none; }
   .wdGroupSummary::-webkit-details-marker{ display:none; }
   .wdChev{ display:inline-block; transition:transform .15s; }
@@ -147,7 +146,7 @@
   </div>
 
   <!-- Content -->
-  <main class="flex-1 px-5 py-5 overflow-y-auto main-pad">
+  <main class="flex-1 px-5 pt-5" style="padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));">
 
     <!-- ============ TAB 1: 新增消費 ============ -->
     <section id="panelAdd">
@@ -743,7 +742,7 @@
     if(tab === 'wishlist') renderWishlist();
     if(tab === 'wardrobe') renderWardrobe();
     if(tab === 'outfit') renderOutfitPrep();
-    const mainEl = document.querySelector('main'); if(mainEl) mainEl.scrollTop = 0;
+    window.scrollTo(0, 0);
   }
   document.getElementById('tabBtnAdd').addEventListener('click', ()=>tabSwitch('add'));
   document.getElementById('tabBtnOverview').addEventListener('click', ()=>tabSwitch('overview'));
@@ -1902,6 +1901,7 @@
       // 舊版備份沒有衣櫃資料時，保留這裡目前的衣櫃，不要清掉
       if(Array.isArray(parsed.wardrobe)){
         wardrobe = parsed.wardrobe;
+        migrateLegacyLayer(wardrobe);
         saveWardrobe(wardrobe);
       }
       // 舊版備份沒有穿搭紀錄時，保留這裡目前的紀錄
@@ -2914,28 +2914,62 @@
     return 'none';
   }
   function slotOf(it){ return it.slot || slotOfCategories(categoriesOf(it)); }
-  // 層次：內搭（貼身或單穿）／可疊穿（可單穿也可當外罩，例如襯衫）／外層（外套）
-  const LAYER_LABELS = { base:'內搭／單穿', mid:'可疊穿（可單穿也可當外罩）', outer:'外層' };
-  const LAYER_SHORT = { base:'內搭', mid:'可疊穿', outer:'外層' };
-  const LAYER_PICK_OPTIONS = [
-    { value:'base', label:'內搭／單穿' }, { value:'mid', label:'可疊穿' }, { value:'outer', label:'外層' },
-  ];
-  function layerOf(it){
-    if(it.layer) return it.layer;
+  // 層次（可複選）：內搭＝穿在別件衣服裡面；單穿＝一件就能當上衣出門；中層＝夾在內搭和外層之間（襯衫、針織、刷毛）；外層＝最外面那件
+  const LAYER_LABELS = { inner:'內搭', solo:'單穿', mid:'中層', outer:'外層' };
+  const LAYER_ORDER = ['inner', 'solo', 'mid', 'outer'];
+  const LAYER_PICK_OPTIONS = LAYER_ORDER.map(l => ({ value: l, label: LAYER_LABELS[l] }));
+  const LAYER_HINT = '內搭＝穿在別件衣服裡面；單穿＝一件就能當上衣出門；中層＝夾在內搭和外層之間（襯衫、針織、刷毛）；外層＝最外面那件';
+  // 沒有手動選的時候用預設：Tee 可內搭也可單穿、襯衫可單穿也可當中層、外套是外層
+  function defaultLayers(it){
     const slot = slotOf(it);
-    if(slot === 'outer') return 'outer';
+    const cats = categoriesOf(it);
+    if(slot === 'outer') return ['outer'];
     if(slot === 'top'){
-      const cats = categoriesOf(it);
-      return cats.includes('襯衫') && !cats.includes('短袖Tee') && !cats.includes('長袖Tee') ? 'mid' : 'base';
+      if(cats.includes('短袖Tee') || cats.includes('長袖Tee')) return ['inner', 'solo'];
+      if(cats.includes('襯衫')) return ['solo', 'mid'];
+      return ['solo'];
     }
-    return null;
+    return [];
+  }
+  function layersOf(it){
+    if(Array.isArray(it.layers) && it.layers.length) return LAYER_ORDER.filter(l => it.layers.includes(l));
+    return defaultLayers(it);
+  }
+  // 舊版資料轉換：單一 layer（base／mid／outer）→ layers 陣列；已指定部位的運動用品視為「可穿搭」
+  function migrateLegacyLayer(list){
+    let changed = false;
+    list.forEach(it => {
+      if(it.layer !== undefined){
+        if(!(Array.isArray(it.layers) && it.layers.length) && it.layer){
+          it.layers = it.layer === 'base' ? ['inner', 'solo'] : it.layer === 'mid' ? ['solo', 'mid'] : it.layer === 'outer' ? ['outer'] : [];
+        }
+        delete it.layer;
+        changed = true;
+      }
+      if(it.slot && it.outfitOk === undefined && slotOfCategories(categoriesOf(it)) === 'sport'){ it.outfitOk = true; changed = true; }
+    });
+    return changed;
+  }
+  // 運動用品（跑步用品）不一定適合日常穿搭，所以多一個「可否穿搭用」；選「可以」才需要再指定部位
+  function sportUndecided(it){
+    return slotOfCategories(categoriesOf(it)) === 'sport' && !it.slot && it.outfitOk !== false;
+  }
+  function slotLabelOf(it){
+    if(slotOfCategories(categoriesOf(it)) === 'sport' && !it.slot) return it.outfitOk === false ? '運動專用（不列入搭配）' : '運動用品（待決定可否穿搭用）';
+    return SLOT_LABELS[slotOf(it)];
   }
   function wardrobeSlotLine(it){
     if(itemKind(it) !== 'apparel') return '';
-    const slot = slotOf(it);
-    if(slot === 'none') return '';
-    const ly = layerOf(it);
-    const text = `部位 ${SLOT_LABELS[slot]}${ly ? ` ・ 層次 ${LAYER_SHORT[ly]}${it.layer ? '' : '（預設）'}` : ''}`;
+    const derived = slotOfCategories(categoriesOf(it));
+    let text;
+    if(derived === 'sport' && !it.slot){
+      text = it.outfitOk === false ? '運動專用（不列入搭配）' : '尚未決定可否穿搭用';
+    }else{
+      const slot = slotOf(it);
+      if(slot === 'none') return '';
+      const ly = layersOf(it);
+      text = `${derived === 'sport' ? '運動用品・可穿搭 ・ ' : ''}部位 ${SLOT_LABELS[slot]}${ly.length ? ` ・ 層次 ${ly.map(l => LAYER_LABELS[l]).join('、')}${it.layers && it.layers.length ? '' : '（預設）'}` : ''}`;
+    }
     return `<p class="text-[11px] mt-0.5 opacity-70">${escapeHtml(text)}</p>`;
   }
 
@@ -3037,20 +3071,24 @@
   }
 
   // 還缺哪些欄位（搭配與評分都要用到）：衣物看色系、材質、花式、保暖度、風格；鞋子／包包／飾品看色系、材質、類型（鞋子、包包再加風格）
-  const FIELD_LABEL = { colors:'色系', materials:'材質', patterns:'花式', warmth:'保暖度', slot:'部位', types:'類型', styles:'風格' };
+  const FIELD_LABEL = { colors:'色系', materials:'材質', patterns:'花式', warmth:'保暖度', slot:'部位', outfitOk:'可否穿搭用', types:'類型', styles:'風格' };
   function quickTagFields(it){
     const kind = itemKind(it);
     const cfg = KIND_CONFIG[kind];
     const has = k => it[k] && it[k].length;
+    const sportOnly = kind === 'apparel' && it.outfitOk === false;   // 運動專用：不需要保暖度與風格
     const f = [];
     if(!has('colors')) f.push('colors');
     if(!has('materials')) f.push('materials');
     if(kind === 'apparel'){
       if(!has('patterns')) f.push('patterns');
-      if(!it.warmth && categoriesOf(it).some(c => !NON_EVALUABLE_CATEGORIES.includes(c))) f.push('warmth');
-      if(!it.slot && slotOfCategories(categoriesOf(it)) === 'sport') f.push('slot');
+      if(!sportOnly && !it.warmth && categoriesOf(it).some(c => !NON_EVALUABLE_CATEGORIES.includes(c))) f.push('warmth');
+      if(slotOfCategories(categoriesOf(it)) === 'sport'){
+        if(it.outfitOk !== true && it.outfitOk !== false) f.push('outfitOk');
+        else if(it.outfitOk === true && !it.slot) f.push('slot');
+      }
     }else if(!has('types')) f.push('types');
-    if(cfg.fields.includes('styles') && !has('styles')) f.push('styles');
+    if(cfg.fields.includes('styles') && !has('styles') && !sportOnly) f.push('styles');
     return f;
   }
   function wardrobeMissingLabels(it){
@@ -3062,7 +3100,7 @@
 
   // ---------- 單品種類：衣物／鞋子／包包／飾品，各自有不同的屬性與評分標準 ----------
   const KIND_CONFIG = {
-    apparel: { label:'衣物', unit:'件', fields:['colors','patterns','materials','seasons','styles','warmth','functions','slot','layer'] },
+    apparel: { label:'衣物', unit:'件', fields:['colors','patterns','materials','seasons','styles','warmth','functions','slot','layers','outfitOk'] },
     shoes:   { label:'鞋子', unit:'雙', fields:['colors','types','materials','styles','functions'], mainSub:true },
     bag:     { label:'包包', unit:'個', fields:['colors','types','materials','styles'] },
     jewelry: { label:'飾品', unit:'件', fields:['colors','types','materials'] },
@@ -3104,7 +3142,7 @@
 
   // 屬性狀態：表單裡暫存所有可能的欄位；鞋子的色系分成主色（單選）與副色
   function newAttrState(){
-    return { colors:[], colorMain:[], colorSubs:[], patterns:[], materials:[], seasons:[], styles:[], types:[], functions:[], warmth:[], slot:[], layer:[] };
+    return { colors:[], colorMain:[], colorSubs:[], patterns:[], materials:[], seasons:[], styles:[], types:[], functions:[], warmth:[], slot:[], layers:[], outfitOk:[] };
   }
   function attrStateFromItem(it){
     const st = newAttrState();
@@ -3115,14 +3153,15 @@
     ['patterns','materials','seasons','styles','types','functions'].forEach(k => { st[k] = [...(it[k] || [])]; });
     if(it.warmth) st.warmth = [String(it.warmth)];
     if(it.slot) st.slot = [it.slot];
-    if(it.layer) st.layer = [it.layer];
+    st.layers = [...(it.layers || [])];
+    if(it.outfitOk === true) st.outfitOk = ['yes']; else if(it.outfitOk === false) st.outfitOk = ['no'];
     return st;
   }
   // 只留下這個種類用得到的欄位，其他一律清空，避免殘留資料影響評分
   // cats（選填）：用來判斷「部位指定」與「層次」是否還適用（換了類別就清掉）
   function attrStateToFields(st, kind, cats){
     const cfg = KIND_CONFIG[kind];
-    const f = { colors:[], patterns:[], materials:[], seasons:[], styles:[], types:[], functions:[], warmth:0, slot:'', layer:'' };
+    const f = { colors:[], patterns:[], materials:[], seasons:[], styles:[], types:[], functions:[], warmth:0, slot:'', layers:[], outfitOk:null };
     if(cfg.fields.includes('colors')){
       f.colors = cfg.mainSub ? [...st.colorMain, ...st.colorSubs.filter(c => !st.colorMain.includes(c))] : [...st.colors];
     }
@@ -3130,9 +3169,15 @@
     if(cfg.fields.includes('warmth') && st.warmth[0]) f.warmth = parseInt(st.warmth[0]);
     if(cfg.fields.includes('slot')){
       const derived = cats ? slotOfCategories(cats) : null;
-      if(st.slot[0] && (!cats || derived === 'sport')) f.slot = st.slot[0];
+      // 運動用品：先決定可否穿搭用；選「可以」才保留部位指定
+      if(cats && derived === 'sport'){
+        f.outfitOk = st.outfitOk[0] === 'yes' ? true : st.outfitOk[0] === 'no' ? false : null;
+        if(f.outfitOk === true && st.slot[0]) f.slot = st.slot[0];
+      }else if(!cats && st.slot[0]){
+        f.slot = st.slot[0];
+      }
       const eff = f.slot || derived;
-      if(st.layer[0] && (!eff || ['top', 'outer'].includes(eff))) f.layer = st.layer[0];
+      if(st.layers.length && (!eff || ['top', 'outer'].includes(eff))) f.layers = LAYER_ORDER.filter(l => st.layers.includes(l));
     }
     return f;
   }
@@ -3151,7 +3196,7 @@
     }
   }
   // 依目前選到的類別（→種類）渲染對應的屬性欄位；getCategories 回傳目前的類別陣列。類別一變就重新呼叫即可
-  // panelOpts：{ noWeather:true } 不顯示保暖度／機能／部位／層次（願望清單用）；{ only:[...欄位] } 只顯示指定欄位（逐件快速標記用）
+  // panelOpts：{ noWeather:true } 不顯示保暖度／機能／部位／層次／可否穿搭用（願望清單用）；{ only:[...欄位] } 只顯示指定欄位（逐件快速標記用）
   function renderAttrPanel(containerId, prefix, getCategories, st, panelOpts){
     const container = document.getElementById(containerId);
     const cats = getCategories();
@@ -3162,7 +3207,9 @@
     const showWx = !(panelOpts && panelOpts.noWeather);
     const want = k => cfg.fields.includes(k) && (!only || only.includes(k));
     const derivedSlot = slotOfCategories(cats);
-    const effSlot = st.slot[0] || derivedSlot;
+    const sportItem = derivedSlot === 'sport';
+    const outfitYes = st.outfitOk[0] === 'yes';
+    const effSlot = (sportItem && outfitYes ? st.slot[0] : null) || derivedSlot;
     const block = (label, id) => `<div><label class="block text-xs opacity-60 mb-1">${label}</label><div id="${prefix}${id}" class="flex flex-wrap gap-1.5"></div></div>`;
     let html = '';
     if(want('colors')){
@@ -3176,12 +3223,14 @@
     if(want('styles')) html += block('風格', 'StylePicker');
     if(showWx && want('warmth')) html += block('保暖度（單選，天氣搭配會用到）', 'WarmthPicker');
     if(showWx && want('functions')) html += block('機能（可複選）', 'FunctionPicker');
-    const showSlot = showWx && want('slot') && derivedSlot === 'sport';
+    const showOutfitOk = showWx && want('outfitOk') && sportItem;
+    if(showOutfitOk) html += block('可否穿搭用（運動用品，單選）', 'OutfitOkPicker');
+    const showSlot = showWx && want('slot') && sportItem && outfitYes;
     if(showSlot) html += block('這件在穿搭中屬於哪個部位？（單選）', 'SlotPicker');
-    const showLayer = showWx && want('layer') && ['top', 'outer'].includes(effSlot);
-    if(showLayer){
-      const def = layerOf({ categories: cats, slot: st.slot[0] });
-      html += block(`層次（單選，沒選就用預設：${def ? LAYER_LABELS[def] : '—'}）`, 'LayerPicker');
+    const showLayers = showWx && want('layers') && ['top', 'outer'].includes(effSlot);
+    if(showLayers){
+      const def = defaultLayers({ categories: cats, slot: showSlot ? st.slot[0] : undefined });
+      html += `<div><label class="block text-xs opacity-60 mb-1">層次（可複選，沒選就用預設：${def.length ? def.map(l => LAYER_LABELS[l]).join('、') : '—'}）</label><div id="${prefix}LayerPicker" class="flex flex-wrap gap-1.5"></div><p class="text-[10px] opacity-50 mt-1 leading-relaxed">${LAYER_HINT}</p></div>`;
     }
     container.innerHTML = html;
 
@@ -3200,8 +3249,10 @@
     if(want('styles')) renderChipPicker(prefix + 'StylePicker', styleOptions, st.styles, STYLE_ADD);
     if(showWx && want('warmth')) renderChipPicker(prefix + 'WarmthPicker', WARMTH_OPTIONS, st.warmth, null, { single: true });
     if(showWx && want('functions')) renderChipPicker(prefix + 'FunctionPicker', toOptions(FUNCTION_OPTIONS), st.functions);
-    if(showSlot) renderChipPicker(prefix + 'SlotPicker', SLOT_PICK_OPTIONS, st.slot, null, { single: true, onChange: () => renderAttrPanel(containerId, prefix, getCategories, st, panelOpts) });
-    if(showLayer) renderChipPicker(prefix + 'LayerPicker', LAYER_PICK_OPTIONS, st.layer, null, { single: true });
+    const rerender = () => renderAttrPanel(containerId, prefix, getCategories, st, panelOpts);
+    if(showOutfitOk) renderChipPicker(prefix + 'OutfitOkPicker', [{ value:'yes', label:'可以用來搭配' }, { value:'no', label:'只在運動時穿' }], st.outfitOk, null, { single: true, onChange: rerender });
+    if(showSlot) renderChipPicker(prefix + 'SlotPicker', SLOT_PICK_OPTIONS, st.slot, null, { single: true, onChange: rerender });
+    if(showLayers) renderChipPicker(prefix + 'LayerPicker', LAYER_PICK_OPTIONS, st.layers);
     return kind;
   }
 
@@ -3513,7 +3564,7 @@
     document.getElementById('wbCancelBtn').addEventListener('click', closeDetail);
     document.getElementById('wbApplyBtn').addEventListener('click', ()=>{
       const add = attrStateToFields(st, kind, cats);
-      if(!Object.values(add).some(a => a.length) && !add.warmth && !add.slot && !add.layer){
+      if(!Object.values(add).some(a => a.length) && !add.warmth && !add.slot && add.outfitOk === null){
         alert('請至少選一個要加上的標記');
         return;
       }
@@ -3526,8 +3577,12 @@
           it[k] = [...new Set([...cur, ...add[k]])];
         });
         if(add.warmth) it.warmth = add.warmth;
-        if(add.slot) it.slot = add.slot;
-        if(add.layer && ['top', 'outer'].includes(slotOf(it))) it.layer = add.layer;
+        if(add.outfitOk !== null && slotOfCategories(categoriesOf(it)) === 'sport'){
+          it.outfitOk = add.outfitOk;
+          if(add.outfitOk === false) delete it.slot;
+        }
+        if(add.slot && it.outfitOk !== false) it.slot = add.slot;
+        if(add.layers.length && ['top', 'outer'].includes(slotOf(it))) { const ls = new Set([...layersOf(it), ...add.layers]); it.layers = LAYER_ORDER.filter(l => ls.has(l)); }
         if(it.autoFields){
           it.autoFields = it.autoFields.filter(x => !(x === 'warmth' && add.warmth) && !(x === 'functions' && add.functions.length));
         }
@@ -3621,7 +3676,7 @@
       missLine +
       section('類別', tally(it => it.categories || [])) +
       section('色系', tally(it => it.colors), name => colorDotHtml(name, 10)) +
-      section('部位', tally(it => [SLOT_LABELS[slotOf(it)]])) +
+      section('部位', tally(it => [slotLabelOf(it)])) +
       section('保暖度', tally(it => it.warmth ? [WARMTH_LABELS[it.warmth]] : [])) +
       section('機能', tally(it => it.functions)) +
       section('類型', tally(it => it.types)) +
@@ -4263,7 +4318,9 @@
     ['colors', 'patterns', 'materials', 'seasons', 'styles', 'types', 'functions'].forEach(k => { it[k] = f[k]; });
     it.warmth = f.warmth;
     if(f.slot) it.slot = f.slot; else delete it.slot;
-    if(f.layer) it.layer = f.layer; else delete it.layer;
+    if(f.layers && f.layers.length) it.layers = f.layers; else delete it.layers;
+    delete it.layer;
+    if(f.outfitOk === true || f.outfitOk === false) it.outfitOk = f.outfitOk; else delete it.outfitOk;
     let auto = Array.isArray(it.autoFields) ? it.autoFields : [];
     if(it.warmth !== prevW) auto = auto.filter(x => x !== 'warmth');
     if(JSON.stringify(it.functions || []) !== prevF) auto = auto.filter(x => x !== 'functions');
@@ -4303,7 +4360,9 @@
       return `<option value="">全部（還缺資料 ${total} 件）</option>` + Object.entries(counts).map(([k, n]) => `<option value="${escapeHtml(k)}" ${k === scope ? 'selected' : ''}>${escapeHtml(k)}（${n}）</option>`).join('');
     }
     function paintPanel(){
-      renderAttrPanel('qtAttr', 'qt', () => categoriesOf(cur), st, { only: (!showAll && fields.length) ? fields : undefined });
+      // 決定「可否穿搭用」之後，同一頁就要能接著指定部位與層次
+      const onlyList = (!showAll && fields.length) ? (fields.includes('outfitOk') ? [...fields, 'slot', 'layers'] : fields) : undefined;
+      renderAttrPanel('qtAttr', 'qt', () => categoriesOf(cur), st, { only: onlyList });
     }
     function render(){
       loadItem();
@@ -4396,7 +4455,8 @@
         ${items.length ? bar(ready / items.length * 100) : ''}
       </div>`;
     }).join('');
-    const unslotted = owned.filter(it => ['sport', 'none'].includes(slotOf(it))).length;
+    const sportUndec = owned.filter(sportUndecided).length;
+    const sportOnlyN = owned.filter(it => slotOfCategories(categoriesOf(it)) === 'sport' && !it.slot && it.outfitOk === false).length;
 
     const N = owned.length;
     const styleItems = owned.filter(it => KIND_CONFIG[itemKind(it)].fields.includes('styles'));
@@ -4412,7 +4472,8 @@
       row('類型（鞋子、包包、飾品）', typeItems.filter(it => (it.types || []).length).length, typeItems.length, '') +
       `<p class="text-xs mt-1" style="color:rgba(244,239,227,0.7);">穿搭紀錄：<span class="font-mono" style="color:var(--paper);">${wearLog.length}</span> 筆${wearLog.length < 10 ? '（多記幾筆，搭配才會知道你的習慣）' : ''}</p>` +
       `<p class="text-xs mt-1" style="color:rgba(244,239,227,0.7);">待洗／暫時不能穿：<span class="font-mono" style="color:var(--paper);">${owned.filter(it => itemStatus(it) !== 'available').length}</span> 件（搭配時不會推薦）</p>` +
-      (unslotted ? `<p class="text-xs mt-1" style="color:var(--thread-soft);">有 ${unslotted} 件還沒歸到部位（運動用品或其他），在單品編輯裡指定部位後才會被搭配用到</p>` : '');
+      (sportUndec ? `<p class="text-xs mt-1" style="color:var(--thread-soft);">有 ${sportUndec} 件運動用品還沒決定「可否穿搭用」，決定後才會被搭配用到（可以用逐件快速標記）</p>` : '') +
+      (sportOnlyN ? `<p class="text-xs mt-1" style="color:rgba(244,239,227,0.5);">運動專用 ${sportOnlyN} 件，不列入搭配</p>` : '');
     const qN = quickTagQueue('').length;
     document.getElementById('outfitPrepQuickBtn').textContent = `⚡ 逐件快速標記（${qN} 件還缺資料）`;
     const sN = wardrobeSuggestTargets().length;
@@ -4699,6 +4760,7 @@
   updatePreview();
   renderAllRecords();
   renderMonth();
+  if(migrateLegacyLayer(wardrobe)) saveWardrobe(wardrobe);
   renderScoreSettings();
   renderWishlist();
   renderWardrobe();
