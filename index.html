@@ -558,7 +558,7 @@
           <option value="available">只看可穿</option>
           <option value="laundry">只看待洗</option>
           <option value="unavailable">只看暫時不能穿</option>
-          <option value="retired">已出清</option>
+          <option value="retired">已出清（找回用）</option>
         </select>
         <select id="wardrobeSort" class="flex-1 px-2 py-2 rounded-lg text-xs" style="background:rgba(244,239,227,0.06); color:var(--paper); border:1px solid rgba(244,239,227,0.18);">
           <option value="">排序：購入日期（新→舊）</option>
@@ -583,6 +583,9 @@
       <div id="wardrobeBulkRow" class="hidden flex gap-2 mb-3">
         <button id="wardrobeSelectAllBtn" type="button" class="btn-press px-3 py-2 rounded-lg text-xs font-display" style="background:rgba(244,239,227,0.1); color:var(--paper);">全選目前結果</button>
         <button id="wardrobeBulkApplyBtn" type="button" class="btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:var(--sage); color:var(--ink);">套用標記到已選（<span id="wardrobeSelectedCount">0</span>）</button>
+      </div>
+      <div id="wardrobeBulkRow3" class="hidden flex gap-2 mb-3">
+        <button id="wardrobeBulkRetireBtn" type="button" class="btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(244,239,227,0.1); color:var(--paper);">📦 已選設為已出清（賣掉、送人、不穿了）</button>
       </div>
       <div id="wardrobeBulkRow2" class="hidden flex gap-2 mb-3">
         <button id="wardrobeBulkLaundryBtn" type="button" class="btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(244,239,227,0.1); color:var(--paper);">🧺 已選設為待洗</button>
@@ -3280,6 +3283,15 @@
           <input id="wdBrand" type="text" value="${escapeHtml(existing ? (existing.brand || '') : '')}" placeholder="例如：DAIWA" class="w-full px-3 py-2 rounded-lg text-sm" style="${inputStyle}">
         </div>
         <div>
+          <label class="block text-xs opacity-60 mb-1">狀態（賣掉、送人、不穿了，請選「已出清」）</label>
+          <select id="wdStatus" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
+            <option value="available">可穿</option>
+            <option value="laundry">待洗</option>
+            <option value="unavailable">暫時不能穿（送修、外借…）</option>
+            <option value="retired">已出清（不再列入衣櫃）</option>
+          </select>
+        </div>
+        <div>
           <label class="block text-xs opacity-60 mb-1">類別（可複選）</label>
           <div id="wdCategoryPicker" class="flex flex-wrap gap-1.5"></div>
         </div>
@@ -3291,15 +3303,6 @@
         <div>
           <label class="block text-xs opacity-60 mb-1">喜愛度（選填）</label>
           <div id="wdRatingPicker" class="flex items-center"></div>
-        </div>
-        <div>
-          <label class="block text-xs opacity-60 mb-1">狀態</label>
-          <select id="wdStatus" class="w-full px-3 py-2 rounded-lg text-sm" style="background:#fff;color:var(--ink);border:1px solid rgba(15,27,45,0.15);">
-            <option value="available">可穿</option>
-            <option value="laundry">待洗</option>
-            <option value="unavailable">暫時不能穿（送修、外借…）</option>
-            <option value="retired">已出清（不再列入衣櫃）</option>
-          </select>
         </div>
         <div>
           <label class="block text-xs opacity-60 mb-1">備註（選填）</label>
@@ -3361,10 +3364,21 @@
     });
   }
 
+  // 出清：賣掉、送人或不穿了。只改狀態，消費紀錄與穿搭歷史都保留，之後隨時能找回來
+  function retireWardrobeItems(ids){
+    const targets = wardrobe.filter(w => ids.includes(w.id));
+    if(!targets.length) return false;
+    const label = targets.length === 1 ? `「${targets[0].name}」` : `這 ${targets.length} 件`;
+    if(!confirm(`確定要把${label}標為已出清嗎？\n它會從衣櫃清單、統計、評分比對和搭配中隱藏；消費紀錄與穿搭歷史都會保留，之後隨時可以在「狀態：已出清」找回來。`)) return false;
+    targets.forEach(w => { w.status = 'retired'; });
+    saveWardrobe(wardrobe);
+    showToast(targets.length === 1 ? `📦 已出清「${targets[0].name}」，可在「狀態：已出清」找回` : `📦 已出清 ${targets.length} 件，可在「狀態：已出清」找回`);
+    return true;
+  }
   function deleteWardrobeItem(id){
     const it = wardrobe.find(w => w.id === id);
     if(!it) return;
-    if(!confirm(`確定要把「${it.name}」從衣櫃移除嗎？（不會影響消費紀錄）`)) return;
+    if(!confirm(`確定要刪除「${it.name}」嗎？\n不會影響消費紀錄，但穿搭紀錄裡會顯示成「已移除的單品」。\n如果只是賣掉或不穿了，建議改用「📦 出清」，歷史才不會斷掉。`)) return;
     wardrobe = wardrobe.filter(w => w.id !== id);
     wardrobeSelectedIds.delete(id);
     saveWardrobe(wardrobe);
@@ -3721,13 +3735,21 @@
             ${untagged ? `<p class="text-[11px] mt-1.5" style="color:var(--rust);">尚未標記：${wardrobeMissingLabels(it).join('、')}</p>` : ''}
           </div>
         </div>
-        ${wardrobeSelectMode ? '' : `
+        ${wardrobeSelectMode ? '' : (itemStatus(it) === 'retired' ? `
+        <div class="flex gap-2 mt-3">
+          <button data-id="${it.id}" class="editWdBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(201,162,39,0.2); color:#8a6d10;">✏️ 編輯</button>
+          <button data-id="${it.id}" class="restoreWdBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(107,138,92,0.25); color:var(--ink);">↩ 放回衣櫃</button>
+          <button data-id="${it.id}" class="delWdBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">刪除</button>
+        </div>` : `
         <div class="flex gap-2 mt-3">
           <button data-id="${it.id}" class="editWdBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(201,162,39,0.2); color:#8a6d10;">✏️ 編輯</button>
           <button data-id="${it.id}" class="laundryWdBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(15,27,45,0.08); color:var(--ink);">${itemStatus(it) === 'laundry' ? '✓ 洗好了' : '🧺 待洗'}</button>
           <button data-id="${it.id}" class="splitWdBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(15,27,45,0.08); color:var(--ink);">✂️ 拆分</button>
-          <button data-id="${it.id}" class="delWdBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">移除</button>
-        </div>`}
+        </div>
+        <div class="flex gap-2 mt-2">
+          <button data-id="${it.id}" class="retireWdBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(15,27,45,0.08); color:var(--ink);">📦 出清（賣掉、送人、不穿了）</button>
+          <button data-id="${it.id}" class="delWdBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">刪除</button>
+        </div>`)}
       `;
     return card;
   }
@@ -3751,6 +3773,7 @@
     document.getElementById('wardrobeSelectModeToggle').textContent = wardrobeSelectMode ? '取消批次標記' : '批次標記';
     document.getElementById('wardrobeBulkRow').classList.toggle('hidden', !wardrobeSelectMode);
     document.getElementById('wardrobeBulkRow2').classList.toggle('hidden', !wardrobeSelectMode);
+    document.getElementById('wardrobeBulkRow3').classList.toggle('hidden', !wardrobeSelectMode);
     const sugN = wardrobeSuggestTargets().length;
     const sugBtn = document.getElementById('wardrobeSuggestBtn');
     sugBtn.classList.toggle('hidden', sugN === 0);
@@ -3812,6 +3835,17 @@
     wrap.querySelectorAll('.editWdBtn').forEach(btn => btn.addEventListener('click', ()=> openWardrobeForm(btn.dataset.id)));
     wrap.querySelectorAll('.delWdBtn').forEach(btn => btn.addEventListener('click', ()=> deleteWardrobeItem(btn.dataset.id)));
     wrap.querySelectorAll('.splitWdBtn').forEach(btn => btn.addEventListener('click', ()=> openWardrobeSplit(btn.dataset.id)));
+    wrap.querySelectorAll('.retireWdBtn').forEach(btn => btn.addEventListener('click', ()=>{
+      if(retireWardrobeItems([btn.dataset.id])) renderWardrobe();
+    }));
+    wrap.querySelectorAll('.restoreWdBtn').forEach(btn => btn.addEventListener('click', ()=>{
+      const it = wardrobe.find(w => w.id === btn.dataset.id);
+      if(!it) return;
+      delete it.status;
+      saveWardrobe(wardrobe);
+      renderWardrobe();
+      showToast(`↩ 已把「${it.name}」放回衣櫃`);
+    }));
     wrap.querySelectorAll('.laundryWdBtn').forEach(btn => btn.addEventListener('click', ()=>{
       const it = wardrobe.find(w => w.id === btn.dataset.id);
       if(!it) return;
@@ -3866,6 +3900,13 @@
   });
   function setSelectedStatus(status){
     if(wardrobeSelectedIds.size === 0){ alert('請先勾選單品'); return; }
+    if(status === 'retired'){
+      if(!retireWardrobeItems([...wardrobeSelectedIds])) return;
+      wardrobeSelectMode = false;
+      wardrobeSelectedIds.clear();
+      renderWardrobe();
+      return;
+    }
     const n = wardrobeSelectedIds.size;
     wardrobe.forEach(it => {
       if(!wardrobeSelectedIds.has(it.id)) return;
@@ -3879,6 +3920,7 @@
   }
   document.getElementById('wardrobeBulkLaundryBtn').addEventListener('click', ()=> setSelectedStatus('laundry'));
   document.getElementById('wardrobeBulkCleanBtn').addEventListener('click', ()=> setSelectedStatus('available'));
+  document.getElementById('wardrobeBulkRetireBtn').addEventListener('click', ()=> setSelectedStatus('retired'));
   document.getElementById('wardrobeUntaggedToggle').addEventListener('click', ()=>{
     wardrobeUntaggedOnly = !wardrobeUntaggedOnly;
     renderWardrobe();
@@ -4532,9 +4574,11 @@
     const counts = {};
     wearLog.filter(e => daysSince(e.date) <= 90).forEach(e => (e.itemIds || []).forEach(id => { counts[id] = (counts[id] || 0) + 1; }));
     const top = Object.entries(counts).filter(([id]) => ownedIds.has(id)).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    // 久未穿：超過 60 天沒穿（含沒穿過），紀錄累積 5 筆以上才顯示，避免剛開始記錄時整個衣櫃都被列進來
+    // 久未穿：紀錄要記滿 60 天才有意義。太早列出來的話，沒記到的單品全都會被算成「沒穿過」
+    const firstDate = wearLog.map(e => e.date).sort()[0];
+    const spanDays = daysSince(firstDate) + 1;
     let idleHtml = '';
-    if(wearLog.length >= 5){
+    if(spanDays >= 60 && wearLog.length >= 5){
       const wm = computeWearStats();
       const idle = owned
         .filter(w => itemStatus(w) === 'available')
@@ -4543,18 +4587,41 @@
         .filter(x => x.days === null || x.days > 60)
         .sort((a, b) => (b.days === null ? 99999 : b.days) - (a.days === null ? 99999 : a.days));
       if(idle.length){
-        idleHtml = `<details class="mt-3"><summary class="text-xs cursor-pointer" style="color:var(--thread-soft);">超過 60 天沒穿（含沒穿過）：${idle.length} 件</summary>
-          <div class="mt-1.5 space-y-1">${idle.slice(0, 15).map(x => `<div class="flex justify-between text-xs"><span class="truncate pr-2" style="color:rgba(244,239,227,0.8);">${escapeHtml(x.w.name)}</span><span class="font-mono shrink-0" style="color:rgba(244,239,227,0.5);">${x.days === null ? '沒穿過' : x.days + ' 天'}</span></div>`).join('')}${idle.length > 15 ? `<p class="text-[11px]" style="color:rgba(244,239,227,0.4);">…還有 ${idle.length - 15} 件</p>` : ''}</div></details>`;
+        idleHtml = `<details class="mt-3 pt-3" style="border-top:1px solid rgba(244,239,227,0.08);">
+          <summary class="flex justify-between items-center text-xs cursor-pointer" style="color:var(--thread-soft);"><span>超過 60 天沒穿（含沒穿過）</span><span class="font-mono">${idle.length} 件</span></summary>
+          <div class="mt-2 space-y-1">${idle.slice(0, 15).map(x => `<div class="flex justify-between text-xs"><span class="truncate pr-2" style="color:rgba(244,239,227,0.8);">${escapeHtml(x.w.name)}</span><span class="font-mono shrink-0" style="color:rgba(244,239,227,0.5);">${x.days === null ? '沒穿過' : x.days + ' 天'}</span></div>`).join('')}${idle.length > 15 ? `<p class="text-[11px]" style="color:rgba(244,239,227,0.4);">…還有 ${idle.length - 15} 件</p>` : ''}</div></details>`;
       }
+    }else{
+      idleHtml = `<p class="text-[11px] mt-3 pt-3" style="color:rgba(244,239,227,0.4); border-top:1px solid rgba(244,239,227,0.08);">紀錄滿 60 天後，才會列出久沒穿的單品（目前記了 ${spanDays} 天、${wearLog.length} 筆）</p>`;
     }
     box.innerHTML = `
       <div class="rounded-lg p-4" style="background:rgba(244,239,227,0.05);">
-        <p class="text-xs mb-2" style="color:rgba(244,239,227,0.6);">本月記錄 <span class="font-mono" style="color:var(--paper);">${monthEntries.length}</span> 套，穿過 <span class="font-mono" style="color:var(--paper);">${monthItems.size}</span> 件不同單品</p>
-        ${top.length ? `<p class="font-display text-[11px] tracking-widest mb-1" style="color:rgba(244,239,227,0.45);">最近 90 天最常穿</p>
-        <div class="space-y-1">${top.map(([id, n]) => `<div class="flex justify-between text-xs"><span class="truncate pr-2" style="color:rgba(244,239,227,0.85);">${escapeHtml(wearItemName(id))}</span><span class="font-mono shrink-0" style="color:var(--paper);">${n} 次</span></div>`).join('')}</div>` : ''}
+        <div class="flex justify-between items-baseline">
+          <p class="text-xs" style="color:rgba(244,239,227,0.6);">本月記錄</p>
+          <p class="text-xs" style="color:rgba(244,239,227,0.6);"><span class="font-mono text-sm" style="color:var(--paper);">${monthEntries.length}</span> 套 ・ <span class="font-mono text-sm" style="color:var(--paper);">${monthItems.size}</span> 件不同單品</p>
+        </div>
+        ${top.length ? `<p class="font-display text-[11px] tracking-widest mt-3 mb-1.5" style="color:rgba(244,239,227,0.45);">最近 90 天最常穿</p>
+        <div class="space-y-1">${top.map(([id, n], i) => `<div class="flex items-center gap-2 text-xs"><span class="font-mono w-4 shrink-0" style="color:rgba(244,239,227,0.35);">${i + 1}</span><span class="truncate flex-1" style="color:rgba(244,239,227,0.88);">${escapeHtml(wearItemName(id))}</span><span class="font-mono shrink-0" style="color:var(--paper);">${n} 次</span></div>`).join('')}</div>` : ''}
         ${idleHtml}
-        ${wearLog.length < 5 ? '<p class="text-[11px] mt-2" style="color:rgba(244,239,227,0.4);">紀錄累積到 5 筆後，會顯示「久沒穿的單品」</p>' : ''}
       </div>`;
+  }
+
+  // 一套穿搭裡的單品：由外到內、由上到下排好，每個部位一行（同部位只在第一行標部位名稱）
+  const WEAR_SLOT_ORDER = ['outer', 'top', 'bottom', 'shoes', 'hat', 'socks', 'bag', 'jewelry', 'accessory', 'base', 'sport', 'none'];
+  const WEAR_SLOT_SHORT = { outer:'外層', top:'上身', bottom:'下身', shoes:'鞋', hat:'帽', socks:'襪', bag:'包', jewelry:'飾品', accessory:'配件', base:'內著', sport:'運動', none:'其他' };
+  function wearItemsOrdered(ids){
+    return ids
+      .map((id, i) => { const it = wardrobe.find(w => w.id === id); return { id, it, slot: it ? slotOf(it) : 'none', i }; })
+      .sort((a, b) => WEAR_SLOT_ORDER.indexOf(a.slot) - WEAR_SLOT_ORDER.indexOf(b.slot) || a.i - b.i);
+  }
+  function wearOutfitRowsHtml(ids){
+    let prev = null;
+    return wearItemsOrdered(ids).map(x => {
+      const label = x.slot !== prev ? (x.it ? WEAR_SLOT_SHORT[x.slot] : '—') : '';
+      prev = x.slot;
+      const dot = x.it && x.it.colors && x.it.colors.length ? colorDotHtml(x.it.colors[0], 11) : '<span style="display:inline-block;width:11px;height:11px;flex-shrink:0;"></span>';
+      return `<div class="wearRow flex items-center gap-2 py-1"><span class="wearSlotLabel text-[11px] font-mono shrink-0 opacity-50" style="width:2.6rem;">${label}</span>${dot}<span class="text-sm min-w-0" style="word-break:break-word;">${escapeHtml(wearItemName(x.id))}</span></div>`;
+    }).join('');
   }
 
   function renderWearLogView(){
@@ -4563,7 +4630,19 @@
     list.innerHTML = '';
     const sorted = [...wearLog].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
     empty.classList.toggle('hidden', sorted.length > 0);
+    const monthCounts = {};
+    sorted.forEach(e => { const m = e.date.slice(0, 7); monthCounts[m] = (monthCounts[m] || 0) + 1; });
+    let lastMonth = null;
     sorted.forEach(e => {
+      const month = e.date.slice(0, 7);
+      if(month !== lastMonth){
+        const h = document.createElement('p');
+        h.className = 'wearMonth font-display text-[11px] tracking-widest px-1 pt-3 pb-0.5';
+        h.style.color = 'rgba(244,239,227,0.45)';
+        h.textContent = `${month.slice(0, 4)} 年 ${parseInt(month.slice(5, 7))} 月 ・ ${monthCounts[month]} 套`;
+        list.appendChild(h);
+        lastMonth = month;
+      }
       const wx = [];
       if(e.temp !== null && e.temp !== undefined && e.temp !== '') wx.push(`${e.temp}°C`);
       if(e.conditions && e.conditions.length) wx.push(e.conditions.join('、'));
@@ -4571,15 +4650,16 @@
       card.className = 'tag-card stitch-edge p-4 rise-in';
       card.innerHTML = `
         <div class="tag-hole"></div>
-        <div class="pr-6">
-          <p class="text-sm font-semibold">${fmtWearDate(e.date)}</p>
-          <p class="text-[11px] font-mono opacity-60 mt-0.5">${escapeHtml(wx.join(' ・ ') || '沒有記錄天氣')}${e.rating ? ` ・ <span style="color:#b8901f;">${starsText(e.rating)}</span>` : ''}</p>
-          <div class="flex flex-wrap gap-1.5 mt-2">${(e.itemIds || []).map(wearItemChipHtml).join('')}</div>
-          ${e.note ? `<p class="text-xs opacity-70 mt-2">${escapeHtml(e.note)}</p>` : ''}
+        <p class="text-base font-semibold pr-8">${fmtWearDate(e.date)}</p>
+        <div class="flex items-center justify-between mt-0.5">
+          <span class="text-[11px] font-mono opacity-60">${escapeHtml(wx.join(' ・ ') || '沒有記錄天氣')}</span>
+          ${e.rating ? `<span class="wearStars text-sm" style="color:#b8901f; letter-spacing:.06em;">${starsText(e.rating)}</span>` : ''}
         </div>
-        <div class="flex gap-2 mt-3">
-          <button data-id="${e.id}" class="editWearBtn btn-press flex-1 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(201,162,39,0.2); color:#8a6d10;">✏️ 編輯</button>
-          <button data-id="${e.id}" class="delWearBtn btn-press px-3 py-2 rounded-lg text-xs font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">刪除</button>
+        <div class="mt-2 pt-2" style="border-top:1px dashed rgba(15,27,45,0.15);">${wearOutfitRowsHtml(e.itemIds || [])}</div>
+        ${e.note ? `<p class="text-xs opacity-70 mt-2">${escapeHtml(e.note)}</p>` : ''}
+        <div class="flex justify-end gap-2 mt-2">
+          <button data-id="${e.id}" class="editWearBtn btn-press px-3 py-1.5 rounded-lg text-[11px] font-display tracking-wide" style="background:rgba(201,162,39,0.2); color:#8a6d10;">✏️ 編輯</button>
+          <button data-id="${e.id}" class="delWearBtn btn-press px-3 py-1.5 rounded-lg text-[11px] font-display tracking-wide" style="background:rgba(180,83,42,0.18); color:var(--rust);">刪除</button>
         </div>`;
       list.appendChild(card);
     });
